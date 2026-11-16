@@ -1,0 +1,342 @@
+/* Parti pris : coque applicative une page. Rail de navigation bleu ardoise à gauche, plan de travail
+   blanc cassé au centre ; la saisie clinique est dense et alignée sur une grille, le courrier se lit
+   sur une « feuille » à droite. La couleur sarcelle est réservée aux actions et aux titres du courrier. */
+:root {
+  /* Couleur */
+  --bg: #f3f5f3;
+  --surface: #ffffff;
+  --surface-2: #ebefed;
+  --line: #dbe2df;
+  --line-strong: #b9c6c2;
+  --ink: #1a2a32;
+  --ink-2: #465963;
+  --ink-3: #62737c;
+  --accent: #13746c;
+  --accent-strong: #0c5650;
+  --accent-soft: #d9ede9;
+  --on-accent: #ffffff;
+  --nav: #2b4354;
+  --nav-2: #3a586d;
+  --nav-ink: #eef4f6;
+  --nav-ink-2: #b4c7d1;
+  --ok: #26734a;
+  --ok-soft: #dff1e5;
+  --warn: #875800;
+  --warn-soft: #faefd2;
+  --danger: #a93626;
+  --danger-soft: #fbe5e0;
+  --info: #2a5a8a;
+  --info-soft: #e0ebf6;
+  --paper: #ffffff;
+  --paper-ink: #1a2a32;
+  --paper-ink-2: #55656e;
+  --paper-line: #d5dddb;
+  --paper-accent: #13746c;
+  --scrim: rgba(18, 30, 36, 0.5);
+  --shadow-sm: 0 1px 2px rgba(26, 42, 50, 0.06);
+  --shadow-md: 0 4px 16px rgba(26, 42, 50, 0.08);
+  --shadow-lg: 0 18px 48px rgba(18, 30, 36, 0.22);
+  /* Typographie */
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Red Hat Display", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12191d;
+    --surface: #1a2328;
+    --surface-2: #232e34;
+    --line: #2d3a41;
+    --line-strong: #44555e;
+    --ink: #e6edef;
+    --ink-2: #b4c2c8;
+    --ink-3: #8c9da6;
+    --accent: #4fb8ae;
+    --accent-strong: #7fd3ca;
+    --accent-soft: #163a38;
+    --on-accent: #06211f;
+    --nav: #0e1518;
+    --nav-2: #1d2a31;
+    --nav-ink: #dce6ea;
+    --nav-ink-2: #8fa3ad;
+    --ok: #6cc08b;
+    --ok-soft: #163324;
+    --warn: #e0b050;
+    --warn-soft: #382c10;
+    --danger: #ee8b79;
+    --danger-soft: #42201a;
+    --info: #86b4e2;
+    --info-soft: #172c42;
+    --paper: #f6f7f5;
+    --paper-ink: #1a2a32;
+    --paper-ink-2: #55656e;
+    --paper-line: #d5dddb;
+    --paper-accent: #13746c;
+    --scrim: rgba(0, 0, 0, 0.62);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12191d;
+  --surface: #1a2328;
+  --surface-2: #232e34;
+  --line: #2d3a41;
+  --line-strong: #44555e;
+  --ink: #e6edef;
+  --ink-2: #b4c2c8;
+  --ink-3: #8c9da6;
+  --accent: #4fb8ae;
+  --accent-strong: #7fd3ca;
+  --accent-soft: #163a38;
+  --on-accent: #06211f;
+  --nav: #0e1518;
+  --nav-2: #1d2a31;
+  --nav-ink: #dce6ea;
+  --nav-ink-2: #8fa3ad;
+  --ok: #6cc08b;
+  --ok-soft: #163324;
+  --warn: #e0b050;
+  --warn-soft: #382c10;
+  --danger: #ee8b79;
+  --danger-soft: #42201a;
+  --info: #86b4e2;
+  --info-soft: #172c42;
+  --paper: #f6f7f5;
+  --paper-ink: #1a2a32;
+  --paper-ink-2: #55656e;
+  --paper-line: #d5dddb;
+  --paper-accent: #13746c;
+  --scrim: rgba(0, 0, 0, 0.62);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  ::placeholder {
+    color: var(--ink-3);
+    opacity: 1;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  /* Gouttière latérale : dégage aussi une éventuelle barre système sur le côté du téléphone. */
+  .gutter {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  @media (min-width: 1024px) {
+    .gutter {
+      padding-left: max(28px, env(safe-area-inset-left, 0px));
+      padding-right: max(28px, env(safe-area-inset-right, 0px));
+    }
+  }
+  .boot {
+    padding: 48px 24px;
+    color: var(--ink-3);
+  }
+
+  .lbl {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+  .inp {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--ink);
+    padding: 5px 9px;
+    font-size: 13.5px;
+    line-height: 1.4;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .inp:hover {
+    border-color: var(--ink-3);
+  }
+  .inp:focus,
+  .inp:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .inp.num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  select.inp {
+    padding-right: 4px;
+  }
+  textarea.inp {
+    resize: vertical;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 32px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--ink-2);
+    padding: 4px 10px 4px 7px;
+    font-size: 13px;
+    line-height: 1.25;
+    text-align: left;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .chip:hover {
+    border-color: var(--ink-3);
+    color: var(--ink);
+  }
+  .chip-box {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--on-accent);
+  }
+  .chip-on {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-weight: 500;
+  }
+  .chip-on .chip-box {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .chip-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--warn);
+  }
+
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  .modal-scrim {
+    background: var(--scrim);
+    padding: max(0px, env(safe-area-inset-top, 0px)) max(0px, env(safe-area-inset-right, 0px)) max(0px, env(safe-area-inset-bottom, 0px))
+      max(0px, env(safe-area-inset-left, 0px));
+  }
+  @media (min-width: 640px) {
+    .modal-scrim {
+      padding: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px))
+        max(20px, env(safe-area-inset-left, 0px));
+    }
+  }
+
+  /* Feuille du courrier : toujours claire, comme le document exporté. */
+  .paper {
+    background: var(--paper);
+    color: var(--paper-ink);
+    border: 1px solid var(--paper-line);
+    border-radius: 4px;
+    box-shadow: var(--shadow-md);
+    font-family: Helvetica, Arial, "Liberation Sans", sans-serif;
+  }
+  .paper-rule {
+    border-top: 1.5px solid var(--paper-accent);
+  }
+  .paper-title {
+    color: var(--paper-accent);
+    font-size: 0.82em;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+  .paper-body {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--paper-ink);
+    font: inherit;
+    line-height: 1.55;
+    resize: none;
+    overflow: hidden;
+    border-radius: 3px;
+  }
+  .paper-body:focus,
+  .paper-body:focus-visible {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
