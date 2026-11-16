@@ -70,6 +70,7 @@ export function RdvForm({ rdv, defaut = {}, onClose }) {
           {seance && <Btn size="sm" icon={Check} onClick={() => { actions.validerSeance(patient.id, rdv.id); onClose(); }}>Valider la séance {o.effectuees + 1}/{o.prescrites}</Btn>}
         </div>
       )}
+      {!tries.length && <p className="mb-3 rounded-md bg-warn-soft px-3 py-2 text-[12.5px] text-ink">Aucun dossier patient pour l'instant : créez d'abord un patient depuis « Dossiers patients ».</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Patient" htmlFor="rdv-patient" className="sm:col-span-2" hint={patient ? ageTexte(patient.ddn) : undefined}>
           <Select id="rdv-patient" value={f.patientId} onChange={choisirPatient} placeholder={null} options={tries.map((p) => [p.id, `${p.nom.toUpperCase()} ${p.prenom}`])} />
@@ -264,7 +265,7 @@ export function Calendrier({ vueInitiale = 'semaine' }) {
       </header>
 
       <div className="overflow-x-auto">
-        <div className="grid pb-3 pr-3 pt-3" style={{ gridTemplateColumns: `50px repeat(${jours.length}, minmax(0, 1fr))`, minWidth: large ? undefined : 780 }}>
+        <div className="grid pb-3 pr-3 pt-3" style={{ gridTemplateColumns: `50px repeat(${jours.length}, minmax(0, 1fr))`, minWidth: large ? undefined : 960 }}>
           {!large && (
             <>
               <span />

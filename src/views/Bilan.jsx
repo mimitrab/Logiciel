@@ -274,10 +274,10 @@ function SectionOM({ n, d, set, normes }) {
               <p className="mb-2 flex items-baseline justify-between gap-2 text-[13px] font-medium text-ink">
                 {titre} <span className="text-[11px] font-normal text-ink-3">norme</span>
               </p>
-              {[['d', 'Divergence', 'D'], ['c', 'Convergence', 'C']].map(([sens, nom, lettre]) => (
-                <div key={sens} className="mb-1.5 grid grid-cols-[minmax(0,1fr)_54px_8px_54px_48px] items-center gap-1.5 last:mb-0">
-                  <span className="truncate text-[12.5px] text-ink-2">
-                    <span className="font-mono font-medium text-ink">{lettre}{prime}</span> {nom}
+              {[['d', 'Divergence', 'D', 'div.'], ['c', 'Convergence', 'C', 'conv.']].map(([sens, nom, lettre, abrege]) => (
+                <div key={sens} className="mb-1.5 grid grid-cols-[minmax(0,1fr)_52px_8px_52px_46px] items-center gap-1.5 last:mb-0">
+                  <span className="whitespace-nowrap text-[12.5px] text-ink-3" title={nom}>
+                    <span className="font-mono text-[13px] font-medium text-ink">{lettre}{prime}</span> {abrege}
                   </span>
                   <Num id={`b-fusion-${dist}-${sens}-bris`} aria-label={`${nom}, ${titre.toLowerCase()}, bris`} placeholder="bris" min={0} value={om.fusion[dist][sens].bris} onChange={(v) => set(`om.fusion.${dist}.${sens}.bris`, v)} />
                   <span className="text-center text-ink-3">/</span>
@@ -289,11 +289,11 @@ function SectionOM({ n, d, set, normes }) {
           ))}
         </div>
         <p className="mt-2 text-[11.5px] leading-snug text-ink-3">
-          Repères : normes d'Hugonnier ({normesTexte(normes)}). Une amplitude est signalée lorsqu'elle est inférieure à la borne basse. Ces valeurs se règlent dans les réglages du cabinet.
+          D : divergence, C : convergence, l'apostrophe désignant la vision de près. Repères : normes d'Hugonnier ({normesTexte(normes)}). Une amplitude est signalée lorsqu'elle est inférieure à la borne basse. Ces valeurs se règlent dans les réglages du cabinet.
         </p>
       </Groupe>
 
-      <Groupe label="Test de Worth" hint="verre rouge devant l'œil droit">
+      <Groupe label="Test de Worth" hint="verre rouge devant l'œil droit, nombre de lumières perçues entre parenthèses">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Vision de loin" htmlFor="b-worth-vl"><Select id="b-worth-vl" value={om.worth.vl} onChange={(v) => set('om.worth.vl', v)} options={WORTH.map((w) => [w[0], w[1]])} /></Field>
           <Field label="Vision de près" htmlFor="b-worth-vp"><Select id="b-worth-vp" value={om.worth.vp} onChange={(v) => set('om.worth.vp', v)} options={WORTH.map((w) => [w[0], w[1]])} /></Field>
@@ -319,7 +319,7 @@ function ChampsCV({ d, set }) {
           <Text id="b-cv-programme" value={cv.programme} onChange={(v) => set('cv.programme', v)} placeholder={goldmann ? 'Isoptères V4e, I4e et I2e' : 'Programme 24-2, stratégie SITA Standard'} />
         </Field>
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3">
         {[['od', 'Œil droit'], ['og', 'Œil gauche']].map(([o, nom]) => {
           const x = cv[o];
           return (

@@ -115,12 +115,12 @@ export const SACCADES = ['précises', 'hypométriques', 'hypermétriques', 'lent
 
 // Test de Worth, verre rouge devant l'œil droit.
 export const WORTH = [
-  ['fusion', 'Vision simultanée avec fusion : 4 lumières', 'une fusion (4 lumières perçues)'],
-  ['neutOD', "Neutralisation de l'œil droit : 3 lumières vertes", "une neutralisation de l'œil droit (3 lumières vertes perçues)", true],
-  ['neutOG', "Neutralisation de l'œil gauche : 2 lumières rouges", "une neutralisation de l'œil gauche (2 lumières rouges perçues)", true],
+  ['fusion', 'Vision simultanée, fusion (4)', 'une fusion (4 lumières perçues)'],
+  ['neutOD', 'Neutralisation OD (3 vertes)', "une neutralisation de l'œil droit (3 lumières vertes perçues)", true],
+  ['neutOG', 'Neutralisation OG (2 rouges)', "une neutralisation de l'œil gauche (2 lumières rouges perçues)", true],
   ['alternance', 'Neutralisation alternante', 'une neutralisation alternante', true],
-  ['diplopieH', 'Diplopie homonyme : 5 lumières', 'une diplopie homonyme (5 lumières perçues)', true],
-  ['diplopieC', 'Diplopie croisée : 5 lumières', 'une diplopie croisée (5 lumières perçues)', true],
+  ['diplopieH', 'Diplopie homonyme (5)', 'une diplopie homonyme (5 lumières perçues)', true],
+  ['diplopieC', 'Diplopie croisée (5)', 'une diplopie croisée (5 lumières perçues)', true],
 ];
 
 // Lang I : 3 figures. Lang II : 4 figures, dont l'étoile visible en monoculaire.
