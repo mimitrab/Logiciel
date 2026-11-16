@@ -1,9 +1,9 @@
-// Module 4 : facturation et cotation NGAP simplifiée.
+// Facturation et cotation NGAP : lettre-clé AMY, barème du cabinet, répartition des parts.
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Plus, Receipt, Sparkles } from 'lucide-react';
-import { Btn, Card, CardHead, Empty, Field, Modal, Num, Pill, Segmented, Select, Text, cx, useApp } from '../ui.jsx';
-import { ACTES, EXONERATIONS, MODES, STATUTS_FACTURE, acte, calculFacture, cotation, suggererActe } from '../domain.js';
-import { dateCourte, euro, fr, moisDe, nomComplet, num, todayISO } from '../lib.js';
+import { Btn, Card, CardHead, Empty, Field, Modal, Num, Segmented, Select, Text, cx, useApp } from '../ui.jsx';
+import { EXONERATIONS, FAMILLES_ACTES, MODES, STATUTS_FACTURE, ZONES, acteDe, calculFacture, cotation, suggererActe, valeurAMY } from '../domain.js';
+import { dateCourte, euro, moisDe, nomComplet, num, todayISO } from '../lib.js';
 
 const TON_SELECT = { warn: 'border-transparent bg-warn-soft text-warn', info: 'border-transparent bg-info-soft text-info', ok: 'border-transparent bg-ok-soft text-ok' };
 
@@ -54,21 +54,23 @@ function Repartition({ c, mutuelle, exoneration }) {
 function FactureForm({ onClose }) {
   const { state, actions } = useApp();
   const T = todayISO();
+  const valeur = valeurAMY(state.cabinet);
   const tries = [...state.patients].sort((a, b) => a.nom.localeCompare(b.nom));
   const [patientId, setPatientId] = useState(tries[0] ? tries[0].id : '');
   const patient = state.patients.find((p) => p.id === patientId);
 
-  // Sélection automatique : séance si le rendez-vous du jour est une rééducation, sinon dernier bilan non facturé.
+  // Sélection automatique : séance si le rendez-vous du jour est une rééducation, sinon dernier examen non facturé.
   const propose = useMemo(() => {
-    if (!patient) return { code: 'BO', raison: '' };
+    if (!patient) return { code: '15.2', raison: '' };
     const rdv = state.rdvs.find((r) => r.date === T && r.patientId === patientId);
-    const seanceDuJour = rdv && rdv.motif === 'reeducation';
+    const seanceDuJour = rdv && rdv.motif.startsWith('reeduc');
     const bilan = seanceDuJour ? null : state.bilans.filter((b) => b.patientId === patientId && !state.factures.some((f) => f.bilanId === b.id)).sort((a, b) => b.date.localeCompare(a.date))[0];
-    return { ...suggererActe({ patient, bilan, rdv }), bilanId: bilan ? bilan.id : null };
+    const anterieurs = bilan ? state.bilans.filter((b) => b.patientId === patientId && b.id !== bilan.id && b.date < bilan.date && b.type === bilan.type).length : 0;
+    return { ...suggererActe({ patient, bilan, rdv, anterieurs }), bilanId: bilan ? bilan.id : null };
   }, [patientId]);
 
   const [code, setCode] = useState(propose.code);
-  const [coef, setCoef] = useState(acte(propose.code).coef);
+  const [coef, setCoef] = useState(acteDe(state.bareme, propose.code).coef);
   const [qte, setQte] = useState(1);
   const [exoneration, setExoneration] = useState(patient ? patient.exoneration : 'aucune');
   const [date, setDate] = useState(T);
@@ -76,13 +78,16 @@ function FactureForm({ onClose }) {
   const [mode, setMode] = useState('');
   useEffect(() => {
     setCode(propose.code);
-    setCoef(acte(propose.code).coef);
+    setCoef(acteDe(state.bareme, propose.code).coef);
     setExoneration(patient ? patient.exoneration || 'aucune' : 'aucune');
   }, [patientId]);
 
-  const calcul = calculFacture({ coef, qte, valeurAMY: state.cabinet.valeurAMY, exoneration, mutuelle: patient && patient.mutuelle });
+  const calcul = calculFacture({ coef, qte, valeur, exoneration, mutuelle: patient && patient.mutuelle });
   const auto = code === propose.code;
-  const groupes = [['bilan', 'Bilans'], ['seance', 'Séances']];
+  const choisir = (c) => {
+    setCode(c);
+    setCoef(acteDe(state.bareme, c).coef);
+  };
 
   return (
     <Modal
@@ -105,11 +110,11 @@ function FactureForm({ onClose }) {
             <Select id="ff-patient" value={patientId} onChange={setPatientId} placeholder={null} options={tries.map((p) => [p.id, `${p.nom.toUpperCase()} ${p.prenom}`])} />
           </Field>
           <Field label="Acte NGAP" htmlFor="ff-acte" className="sm:col-span-2">
-            <select id="ff-acte" className="inp" value={code} onChange={(e) => { setCode(e.target.value); setCoef(acte(e.target.value).coef); }}>
-              {groupes.map(([f, l]) => (
+            <select id="ff-acte" className="inp" value={code} onChange={(e) => choisir(e.target.value)}>
+              {FAMILLES_ACTES.map(([f, l]) => (
                 <optgroup key={f} label={l}>
-                  {ACTES.filter((a) => a.famille === f).map((a) => (
-                    <option key={a.code} value={a.code}>{cotation(a.coef)} · {a.libelle}</option>
+                  {state.bareme.filter((a) => a.famille === f).map((a) => (
+                    <option key={a.code} value={a.code}>{cotation(a.coef)} · {a.libelle}{a.aPreciser ? ' (libellé à préciser)' : ''}</option>
                   ))}
                 </optgroup>
               ))}
@@ -119,7 +124,7 @@ function FactureForm({ onClose }) {
               {auto ? `Sélection automatique : ${propose.raison}.` : (
                 <span>
                   Acte choisi à la main.{' '}
-                  <button type="button" className="font-medium text-accent hover:underline" onClick={() => { setCode(propose.code); setCoef(acte(propose.code).coef); }}>Revenir à l'acte proposé</button>
+                  <button type="button" className="font-medium text-accent hover:underline" onClick={() => choisir(propose.code)}>Revenir à l'acte proposé</button>
                 </span>
               )}
             </p>
@@ -134,7 +139,7 @@ function FactureForm({ onClose }) {
         <div className="flex flex-col gap-3">
           <p className="tnum font-mono text-[13px] text-ink-2">
             {cotation(num(coef) || 0)}
-            {(num(qte) || 1) > 1 ? ` × ${num(qte)}` : ''} × {euro(state.cabinet.valeurAMY)}
+            {(num(qte) || 1) > 1 ? ` × ${num(qte)}` : ''} × {euro(valeur)}
           </p>
           <Repartition c={calcul} mutuelle={patient && patient.mutuelle} exoneration={exoneration} />
         </div>
@@ -147,29 +152,32 @@ export default function Facturation() {
   const { state, actions } = useApp();
   const [filtre, setFiltre] = useState('toutes');
   const [creation, setCreation] = useState(false);
+  const valeur = valeurAMY(state.cabinet);
+  const zone = ZONES[state.cabinet.zone] || ZONES.metropole;
   const mois = moisDe(todayISO());
   const somme = (l) => l.reduce((n, f) => n + f.montant, 0);
   const duMois = state.factures.filter((f) => moisDe(f.date) === mois);
   const parStatut = (s) => state.factures.filter((f) => f.statut === s);
   const lignes = state.factures.filter((f) => filtre === 'toutes' || f.statut === filtre).sort((a, b) => b.date.localeCompare(a.date) || b.numero.localeCompare(a.numero));
   const patient = (id) => state.patients.find((p) => p.id === id);
+  const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="eyebrow">Cotation NGAP simplifiée</p>
+          <p className="eyebrow">Cotation NGAP</p>
           <h1 className="mt-1 text-[25px] font-bold leading-tight text-ink">Facturation</h1>
-          <p className="mt-1 text-[13.5px] text-ink-2">Lettre-clé AMY à {euro(state.cabinet.valeurAMY)}. Les montants se calculent à partir du coefficient de l'acte.</p>
+          <p className="mt-1 text-[13.5px] text-ink-2">Lettre-clé AMY à {euro(valeur)} ({zone.label.toLowerCase()}). Le montant d'un acte est son coefficient multiplié par la lettre-clé.</p>
         </div>
         <Btn variant="primary" icon={Plus} onClick={() => setCreation(true)}>Nouvelle facture</Btn>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Total label="Facturé ce mois-ci" valeur={euro(somme(duMois))} detail={`${duMois.length} acte${duMois.length > 1 ? 's' : ''}`} />
+        <Total label="Facturé ce mois-ci" valeur={euro(somme(duMois))} detail={pluriel(duMois.length, 'acte')} />
         <Total label="Encaissé ce mois-ci" valeur={euro(somme(duMois.filter((f) => f.statut === 'payee')))} detail="factures réglées" />
-        <Total label="En attente de règlement" valeur={euro(somme(parStatut('en-attente')))} detail={`${parStatut('en-attente').length} facture${parStatut('en-attente').length > 1 ? 's' : ''} transmise${parStatut('en-attente').length > 1 ? 's' : ''}`} />
-        <Total label="À facturer" valeur={euro(somme(parStatut('a-facturer')))} detail={`${parStatut('a-facturer').length} acte${parStatut('a-facturer').length > 1 ? 's' : ''} à finaliser`} />
+        <Total label="En attente de règlement" valeur={euro(somme(parStatut('en-attente')))} detail={`${pluriel(parStatut('en-attente').length, 'facture')} transmise${parStatut('en-attente').length > 1 ? 's' : ''}`} />
+        <Total label="À facturer" valeur={euro(somme(parStatut('a-facturer')))} detail={`${pluriel(parStatut('a-facturer').length, 'acte')} à finaliser`} />
       </div>
 
       <Segmented id="factures-filtre" label="Filtrer les factures" allowEmpty={false} value={filtre} onChange={setFiltre} options={[['toutes', `Toutes (${state.factures.length})`], ...Object.entries(STATUTS_FACTURE).map(([k, v]) => [k, `${v.label} (${parStatut(k).length})`])]} />
@@ -241,25 +249,38 @@ export default function Facturation() {
         )}
       </Card>
 
-      <Card>
-        <CardHead title="Barème utilisé" hint="valeurs indicatives, à vérifier avec la NGAP en vigueur" />
-        <ul className="grid gap-x-6 gap-y-1.5 px-4 py-3.5 md:grid-cols-2">
-          {ACTES.map((a) => (
-            <li key={a.code} className="flex items-baseline justify-between gap-3 text-[13px]">
-              <span className="min-w-0 text-ink-2">
-                <span className="tnum mr-2 inline-block w-[74px] font-mono text-[12.5px] font-medium text-ink">{cotation(a.coef)}</span>
-                {a.libelle}
-              </span>
-              <span className="tnum flex-none font-mono text-[12.5px] text-ink">{euro(a.coef * state.cabinet.valeurAMY)}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="border-t border-line px-4 py-2.5 text-[12px] text-ink-3">
-          Prise en charge standard : {fr(60)} % par la Sécurité sociale, le reste par la mutuelle si le patient en a une. La valeur de la lettre-clé se modifie dans les réglages du cabinet.
-        </p>
-      </Card>
-
+      <Bareme bareme={state.bareme} valeur={valeur} zone={zone} />
       {creation && <FactureForm onClose={() => setCreation(false)} />}
     </div>
+  );
+}
+
+/** Barème du cabinet : cotations et tarifs à la valeur courante de la lettre-clé. */
+export function Bareme({ bareme, valeur, zone }) {
+  return (
+    <Card>
+      <CardHead title="Barème NGAP du cabinet" hint={`AMY à ${euro(valeur)}, ${zone.label.toLowerCase()}`} />
+      <div className="grid gap-x-8 gap-y-4 px-4 py-3.5 lg:grid-cols-2">
+        {FAMILLES_ACTES.map(([f, titre]) => (
+          <div key={f} className="min-w-0">
+            <p className="eyebrow mb-1.5">{titre}</p>
+            <ul className="grid gap-1.5">
+              {bareme.filter((a) => a.famille === f).map((a) => (
+                <li key={a.code} className="flex items-baseline justify-between gap-3 text-[13px]">
+                  <span className="min-w-0 text-ink-2">
+                    <span className="tnum mr-2 inline-block w-[74px] font-mono text-[12.5px] font-medium text-ink">{cotation(a.coef)}</span>
+                    {a.aPreciser ? <span className="text-ink-3">Libellé à préciser</span> : a.libelle}
+                  </span>
+                  <span className="tnum flex-none font-mono text-[12.5px] text-ink">{euro(a.coef * valeur)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p className="border-t border-line px-4 py-2.5 text-[12px] leading-snug text-ink-3">
+        Prise en charge standard : 60 % par la Sécurité sociale, le reste par la mutuelle si le patient en a une. Les libellés et la zone tarifaire se règlent dans les réglages du cabinet (super-administrateur).
+      </p>
+    </Card>
   );
 }

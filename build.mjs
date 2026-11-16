@@ -1,6 +1,6 @@
 // Assemble l'application en un seul fichier HTML.
-//   dist/binocle-orthoptie.html : fragment publié comme artefact (sans <html>/<head>/<body>)
-//   index.html                  : même application, document autonome ouvrable dans un navigateur
+//   dist/saccades.html : fragment publié comme artefact (sans <html>/<head>/<body>)
+//   index.html         : même application, document autonome ouvrable dans un navigateur
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -39,9 +39,9 @@ const [head, body] = template.split('<!--BODY-->');
 const fill = (s, js) => s.replace('/*__CSS__*/', () => css).replace('/*__JS__*/', () => js);
 
 mkdirSync(r('dist'), { recursive: true });
-writeFileSync(r('dist/binocle-orthoptie.html'), fill(head + body, await bundle(false)));
+writeFileSync(r('dist/saccades.html'), fill(head + body, await bundle(false)));
 writeFileSync(
   r('index.html'),
   `<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n${fill(head, '')}</head>\n<body>\n${fill(body, await bundle(true))}</body>\n</html>\n`,
 );
-console.log('OK  dist/binocle-orthoptie.html + index.html');
+console.log('OK  dist/saccades.html + index.html');

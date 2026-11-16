@@ -1,7 +1,7 @@
 {
-  "name": "cabinet-orthoptie",
+  "name": "saccades",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Prototype de gestion de cabinet d'orthoptie et de génération de bilans",
   "type": "module",
   "scripts": {

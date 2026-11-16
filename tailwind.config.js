@@ -14,6 +14,7 @@ const colors = {
   warn: { DEFAULT: v('warn'), soft: v('warn-soft') },
   danger: { DEFAULT: v('danger'), soft: v('danger-soft') },
   info: { DEFAULT: v('info'), soft: v('info-soft') },
+  plum: { DEFAULT: v('plum'), soft: v('plum-soft') },
   paper: { DEFAULT: v('paper'), ink: v('paper-ink'), 'ink-2': v('paper-ink-2'), line: v('paper-line'), accent: v('paper-accent') },
 };
 

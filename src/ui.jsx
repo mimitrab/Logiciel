@@ -9,6 +9,15 @@ export const cx = (...a) => a.filter(Boolean).join(' ');
 export const AppCtx = createContext(null);
 export const useApp = () => useContext(AppCtx);
 
+/** Le tracé d'une saccade : un regard qui saute d'un point de fixation au suivant. */
+export const Logo = ({ size = 30 }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M3 23h7v-7h8V9h8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="27" cy="9" r="2.6" fill="currentColor" />
+    <circle cx="3" cy="23" r="1.6" fill="currentColor" opacity="0.55" />
+  </svg>
+);
+
 const TAILLES = { sm: 'h-8 px-2.5 text-[12.5px]', md: 'h-9 px-3.5 text-[13.5px]', lg: 'h-11 px-5 text-[14.5px]' };
 const VARIANTES = {
   primary: 'bg-accent text-on-accent hover:bg-accent-strong',
@@ -40,6 +49,7 @@ const TONS = {
   danger: 'bg-danger-soft text-danger',
   info: 'bg-info-soft text-info',
   accent: 'bg-accent-soft text-accent-strong',
+  plum: 'bg-plum-soft text-plum',
 };
 export function Pill({ tone = 'neutral', icon: Icon, children, className }) {
   return (
@@ -92,9 +102,9 @@ export function Select({ id, value, onChange, options, placeholder = '—', clas
     </select>
   );
 }
-export function Chip({ id, checked, onChange, suggested, children }) {
+export function Chip({ id, checked, onChange, suggested, disabled, children }) {
   return (
-    <button type="button" id={id} role="checkbox" aria-checked={!!checked} onClick={() => onChange(!checked)} className={cx('chip', checked && 'chip-on')}>
+    <button type="button" id={id} role="checkbox" aria-checked={!!checked} disabled={disabled} onClick={() => !disabled && onChange(!checked)} className={cx('chip', checked && 'chip-on', disabled && 'cursor-not-allowed opacity-55')}>
       <span className="chip-box" aria-hidden="true">
         {checked && <Check size={11} strokeWidth={3.5} />}
       </span>
@@ -155,6 +165,20 @@ export function Empty({ icon: Icon, title, children }) {
       {Icon && <Icon size={26} className="text-ink-3" aria-hidden="true" />}
       <p className="font-medium text-ink">{title}</p>
       {children && <div className="max-w-sm text-[13px] text-ink-3">{children}</div>}
+    </div>
+  );
+}
+
+/** Encadré d'information ou d'alerte. */
+export function Notice({ tone = 'info', icon: Icon, title, children, className }) {
+  const tons = { info: 'border-info bg-info-soft text-info', warn: 'border-warn bg-warn-soft text-warn', danger: 'border-danger bg-danger-soft text-danger', ok: 'border-ok bg-ok-soft text-ok', neutral: 'border-line bg-surface-2 text-ink-2' };
+  return (
+    <div className={cx('flex gap-2.5 rounded-lg border px-3.5 py-3 text-[13px] leading-relaxed', tons[tone], className)}>
+      {Icon && <Icon size={16} className="mt-0.5 flex-none" aria-hidden="true" />}
+      <div className="min-w-0">
+        {title && <p className="font-semibold">{title}</p>}
+        <div className={tone === 'neutral' ? '' : 'text-ink'}>{children}</div>
+      </div>
     </div>
   );
 }

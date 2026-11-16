@@ -99,3 +99,27 @@ export function fusion(base, extra) {
   }
   return out;
 }
+
+/* ---------- Heures et durées ---------- */
+export const enMinutes = (hhmm) => {
+  const [h, m] = String(hhmm || '0:0').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+export const enHeure = (min) => `${pad(Math.floor(min / 60))}:${pad(Math.round(min % 60))}`;
+/** 40 → « 40 min », 60 → « 1 h », 70 → « 1 h 10 » */
+export const dureeTexte = (min) => {
+  const m = Math.round(Number(min) || 0);
+  if (m < 60) return `${m} min`;
+  return m % 60 ? `${Math.floor(m / 60)} h ${pad(m % 60)}` : `${Math.floor(m / 60)} h`;
+};
+export const lundiDe = (iso) => {
+  const d = parseISO(iso);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return toISO(d);
+};
+const JOURS_COURTS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+export const jourCourt = (iso) => JOURS_COURTS[parseISO(iso).getDay()];
+export const horodatage = (ts) => {
+  const d = new Date(ts);
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};

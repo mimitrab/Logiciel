@@ -131,3 +131,26 @@ export async function exporterPdf(lettre, nomFichier, dl) {
     return e && e.code === 'declined' ? 'refuse' : 'indisponible';
   }
 }
+
+/* ---------- Remise d'un fichier quelconque (sauvegarde chiffrée, etc.) ---------- */
+/** @returns {Promise<'ok'|'refuse'|'indisponible'>} */
+export async function remettreFichier(nom, contenu, type, dl) {
+  if (AUTONOME) {
+    const url = URL.createObjectURL(new Blob([contenu], { type }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nom;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return 'ok';
+  }
+  if (!dl) return 'indisponible';
+  try {
+    await dl.save({ filename: nom, data: contenu });
+    return 'ok';
+  } catch (e) {
+    return e && e.code === 'declined' ? 'refuse' : 'indisponible';
+  }
+}
