@@ -134,8 +134,9 @@ authentification et choisit un nouveau mot de passe. L'opération est inscrite a
 
 ### Si vous perdez votre propre accès
 
-Votre compte ne peut pas être réinitialisé depuis le site. Depuis l'ordinateur où la commande
-`scalingo` est installée (ou depuis le *Terminal* du tableau de bord Scalingo) :
+Votre compte ne peut pas être réinitialisé depuis le site. Installez une fois l'outil en ligne de
+commande de Scalingo sur votre ordinateur (documentation Scalingo, « CLI »), connectez-le à votre
+compte Scalingo, puis :
 
 ```sh
 scalingo --app <nom-de-votre-application> run npm run reinitialiser-acces -- proprietaire
