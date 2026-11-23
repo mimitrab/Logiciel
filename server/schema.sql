@@ -1,13 +1,37 @@
 -- Schéma de la base SACCADES (PostgreSQL). Idempotent : exécuté à chaque démarrage.
+-- Plateforme multi-cabinets : chaque cabinet est isolé ; le propriétaire de la plateforme
+-- gère les inscriptions et les abonnements sans jamais accéder aux dossiers des patients.
+
+create table if not exists cabinets (
+  id text primary key,
+  nom text not null,
+  ville text not null default '',
+  statut text not null default 'en_attente' check (statut in ('en_attente', 'actif', 'suspendu', 'refuse')),
+  essai_fin date,
+  acces_jusqu date,
+  code_parrainage text not null unique,
+  parrain_id text references cabinets (id),
+  contact_email text not null default '',
+  fondateur_rpps text not null default '',
+  stripe_client text,
+  stripe_abonnement text,
+  abonnement_statut text,
+  premier_paiement timestamptz,
+  cree timestamptz not null default now(),
+  valide_le timestamptz
+);
 
 create table if not exists utilisateurs (
   id text primary key,
+  cabinet_id text references cabinets (id),
   identifiant text not null unique,
-  role text not null check (role in ('admin', 'praticien')),
+  role text not null check (role in ('plateforme', 'admin', 'praticien')),
+  gestionnaire boolean not null default false,
   prenom text not null default '',
   nom text not null default '',
   titre text not null default '',
   rpps text not null default '',
+  email text not null default '',
   hash text not null,
   doit_changer boolean not null default true,
   totp_secret text,
@@ -19,6 +43,7 @@ create table if not exists utilisateurs (
   derniere_connexion timestamptz,
   cree timestamptz not null default now()
 );
+create index if not exists utilisateurs_cabinet on utilisateurs (cabinet_id);
 
 -- Le jeton de session n'est jamais stocké : seule son empreinte SHA-256 l'est.
 create table if not exists sessions (
@@ -44,14 +69,26 @@ create table if not exists elements (
 );
 create index if not exists elements_praticien on elements (praticien_id, collection);
 
+-- Réglages par cabinet ; ceux de la plateforme sont rangés sous l'identifiant « _plateforme ».
 create table if not exists reglages (
-  cle text primary key,
-  valeur jsonb not null
+  cabinet_id text not null,
+  cle text not null,
+  valeur jsonb not null,
+  primary key (cabinet_id, cle)
+);
+
+create table if not exists parrainages (
+  filleul_id text primary key references cabinets (id),
+  parrain_id text not null references cabinets (id),
+  statut text not null default 'en_attente' check (statut in ('en_attente', 'recompense')),
+  recompense_le timestamptz,
+  cree timestamptz not null default now()
 );
 
 create table if not exists journal (
   id bigserial primary key,
   ts timestamptz not null default now(),
+  cabinet_id text,
   utilisateur_id text,
   action text not null,
   praticien_id text,
@@ -59,7 +96,7 @@ create table if not exists journal (
   detail text,
   ip text
 );
-create index if not exists journal_ts on journal (ts desc);
+create index if not exists journal_cabinet on journal (cabinet_id, id desc);
 
 -- Le journal d'audit ne se modifie pas et ne se supprime pas.
 create or replace function journal_inalterable() returns trigger language plpgsql as '

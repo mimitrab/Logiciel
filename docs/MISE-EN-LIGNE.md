@@ -1,17 +1,20 @@
 # Mettre SACCADES en ligne
 
-Ce guide couvre deux mises en ligne très différentes :
+SACCADES fonctionne comme une plateforme : chaque orthoptiste inscrit son cabinet, profite d'une
+période gratuite, puis s'abonne. Vous, propriétaire, validez les inscriptions et suivez les
+abonnements et parrainages, sans jamais accéder aux dossiers des patients.
 
-1. **La démonstration publique** (patients fictifs) : gratuite, en ligne en deux minutes.
-2. **La version de production** (vrais patients) : chez un hébergeur certifié HDS, avec les démarches
-   réglementaires à mener **avant** le premier vrai patient.
+1. **Démonstration publique** (patients fictifs) : gratuite, en ligne en deux minutes.
+2. **Plateforme en production** (vrais patients) : hébergeur certifié HDS, documents juridiques,
+   paiement. Toutes les démarches doivent être faites **avant** le premier vrai patient.
 
 ---
 
 ## 1. Démonstration publique sur GitHub Pages
 
 La démonstration est publiée sur la branche `gh-pages` du dépôt. Elle ne contient que des patients
-fictifs ; ce que les visiteurs saisissent reste dans leur navigateur et n'est envoyé nulle part.
+fictifs ; ce que les visiteurs saisissent reste dans leur navigateur. Le compte « Propriétaire de
+SACCADES » de la démonstration montre votre future console.
 
 **Activer la publication (une seule fois) :**
 
@@ -20,102 +23,137 @@ fictifs ; ce que les visiteurs saisissent reste dans leur navigateur et n'est en
 3. *Branch* : **gh-pages**, dossier **/ (root)**, puis **Save**.
 4. Après une à deux minutes, le site répond à l'adresse **https://mimitrab.github.io/Logiciel/**
 
-**Avant de diffuser l'adresse :** complétez l'éditeur dans les mentions légales (obligatoire pour
-un site public en France). Indiquez à votre développeur le nom ou la raison sociale, l'adresse et un
-contact, ou modifiez `CABINET_DEMO.editeur` dans `src/seed.js`.
-
-**Mettre à jour la démonstration :** `npm run construire`, puis publier `dist/demo/index.html`
-sur la branche `gh-pages`.
-
 ---
 
-## 2. Version de production chez un hébergeur certifié HDS
+## 2. Plateforme en production
 
-### Pourquoi un hébergeur certifié
+### Hébergeur
 
-Héberger des données de santé pour le compte d'un professionnel exige un hébergeur certifié HDS
-(Code de la santé publique, article L. 1111-8). La version serveur de SACCADES est prête à être
-déployée chez un tel hébergeur. Le contrat doit être **à votre nom** (ou à celui de votre société) :
-personne ne peut le souscrire à votre place.
+Héberger des données de santé pour le compte de professionnels exige un hébergeur certifié HDS
+(Code de la santé publique, article L. 1111-8). Proposition : **Scalingo**, plateforme française
+certifiée ISO 27001 et HDS sur ses régions de Paris : `osc-fr1` (accessible directement) et
+`osc-secnum-fr1` (infrastructure SecNumCloud, accès sur demande pour les entreprises). Alternatives :
+Clever Cloud, OVHcloud. Vérifiez la certification en cours sur la liste de l'Agence du numérique en
+santé.
 
-### Hébergeur proposé : Scalingo
+Le contrat se souscrit **au nom de votre société** : personne ne peut le faire à votre place.
 
-Plateforme française, certifiée ISO 27001 et HDS sur ses régions de Paris : `osc-fr1` (accessible
-directement) et `osc-secnum-fr1` (infrastructure SecNumCloud, accès sur demande, réservé aux
-entreprises et organismes publics). L'application se déploie directement depuis le dépôt GitHub.
+### Déploiement
 
-Alternatives certifiées HDS : Clever Cloud, OVHcloud. Vérifiez toujours la certification en cours
-sur la liste publiée par l'Agence du numérique en santé.
+1. Créer le compte Scalingo au nom de votre société.
+2. Créer l'application dans la région `osc-fr1`. Indiquez qu'elle héberge des **données de santé** et
+   acceptez les conditions HDS de Scalingo. Si l'option n'apparaît pas, demandez-la au support avant
+   tout import de patient.
+3. Ajouter l'extension **PostgreSQL** (onglet *Addons*), avec une offre qui comprend des sauvegardes
+   automatiques.
+4. Relier le dépôt GitHub `mimitrab/Logiciel` (onglet *Deploy*).
+5. Variables (onglet *Environment*), voir `.env.exemple` :
+   - `NODE_ENV` = `production` ;
+   - `PROPRIETAIRE_IDENTIFIANT` = `proprietaire` ;
+   - `PROPRIETAIRE_MOT_DE_PASSE` = un mot de passe provisoire d'au moins 12 caractères ;
+   - `URL_PUBLIQUE` = l'adresse du site.
+6. Déployer. Au premier démarrage, le serveur crée les tables et **votre compte de propriétaire**.
+7. Première connexion : mot de passe provisoire, activation de la double authentification (QR code à
+   scanner avec FreeOTP, Google Authenticator ou Microsoft Authenticator), puis mot de passe définitif.
+   Supprimez ensuite `PROPRIETAIRE_MOT_DE_PASSE`.
+8. Rattacher votre nom de domaine (onglet *Domains*), par exemple `app.saccades.fr`.
 
-### Étapes de déploiement
+### Ouvrir les inscriptions
 
-1. **Créer le compte** sur scalingo.com, au nom du cabinet ou de votre société.
-2. **Créer l'application** dans la région `osc-fr1`. Indiquez qu'elle héberge des **données de santé** et
-   acceptez les conditions HDS de Scalingo. Si l'option n'apparaît pas, demandez-la au support
-   **avant** d'importer le moindre patient.
-3. **Ajouter l'extension PostgreSQL** (onglet *Addons*). Choisissez une offre qui comprend des sauvegardes
-   automatiques. L'extension fournit l'adresse de la base (`SCALINGO_POSTGRESQL_URL`).
-4. **Relier le dépôt GitHub** `mimitrab/Logiciel` (onglet *Deploy*), branche à déployer :
-   `claude/loving-mendel-j2u3fz` ou `main` une fois fusionnée.
-5. **Variables d'environnement** (onglet *Environment*), voir `.env.exemple` :
-   - `NODE_ENV` = `production`
-   - `ADMIN_IDENTIFIANT` = `admin` (ou l'identifiant de votre choix)
-   - `ADMIN_MOT_DE_PASSE` = un mot de passe provisoire d'au moins 12 caractères
-6. **Déployer.** Au premier démarrage, le serveur crée les tables et le compte super-administrateur.
-7. **Première connexion** à l'adresse fournie par Scalingo :
-   - mot de passe provisoire ;
-   - activation de la double authentification : scannez le QR code avec une application
-     d'authentification (FreeOTP, Google Authenticator, Microsoft Authenticator) ;
-   - choix du mot de passe définitif.
-8. **Supprimez ensuite la variable `ADMIN_MOT_DE_PASSE`**, qui ne sert plus.
-9. **Réglages du cabinet** : coordonnées, éditeur et hébergeur pour les mentions légales.
-10. **Créez les comptes des praticiens** (menu *Utilisateurs*). Chacun active sa double
-    authentification et choisit son mot de passe à la première connexion.
-11. *Facultatif :* nom de domaine du cabinet (par exemple `saccades.mon-cabinet.fr`), à rattacher dans
-    l'onglet *Domains* de Scalingo.
+Dans votre console, menu **Offre et inscriptions** :
+
+- prix par praticien et par mois (HT), durée de la période gratuite, mois offerts au parrain et au filleul ;
+- éditeur et hébergeur, pour les mentions légales ;
+- **conditions générales** : les inscriptions ne peuvent pas s'ouvrir tant qu'elles sont vides ;
+- case « Inscriptions ouvertes au public ».
+
+**Chaque inscription arrive en attente.** Vérifiez le numéro RPPS sur https://annuaire.sante.fr, puis
+cliquez sur *Valider* : la période gratuite commence à ce moment-là.
+
+### Paiement
+
+**Sans paiement en ligne (pour démarrer).** Quand un cabinet vous règle par virement, cliquez sur
+*Paiement reçu* et indiquez la date de fin de la période payée.
+
+**Avec Stripe (paiement par carte ou prélèvement SEPA) :**
+
+1. Ouvrez un compte Stripe au nom de votre société.
+2. Créez un produit « SACCADES » avec un **prix mensuel récurrent par unité** égal au prix HT de votre
+   offre. Réglez la TVA avec votre comptable, par exemple avec Stripe Tax.
+3. Copiez l'identifiant du prix (`price_…`) dans `STRIPE_PRICE_ID` et la clé secrète dans
+   `STRIPE_SECRET_KEY`.
+4. Créez un point de terminaison webhook vers `https://<votre domaine>/api/stripe/webhook`. Abonnez-le
+   aux événements `checkout.session.completed`, `customer.subscription.created`,
+   `customer.subscription.updated`, `customer.subscription.deleted` et `invoice.paid`. Copiez son secret
+   de signature dans `STRIPE_WEBHOOK_SECRET`.
+5. Faites un essai complet en **mode test** de Stripe (clés `sk_test_…`) avant de passer aux clés
+   réelles.
+
+Un cabinet en période gratuite qui s'abonne n'est prélevé qu'à la fin de sa période gratuite. Le
+nombre de praticiens facturés suit les comptes actifs du cabinet.
+
+### Parrainage
+
+Chaque cabinet a un code (`SAC-XXXXXX`) et un lien d'inscription. Quand un cabinet parrainé effectue
+son **premier paiement**, le parrain et le filleul reçoivent chacun les mois offerts prévus dans
+l'offre :
+
+- **sans Stripe**, ces mois prolongent la date d'accès ;
+- **avec Stripe**, ils décalent aussi le prochain prélèvement.
+
+La récompense n'est jamais attribuée à la simple inscription.
+
+### Fin de la période gratuite
+
+Un cabinet qui ne s'abonne pas passe en **lecture seule** : ses dossiers restent consultables et
+exportables, mais la saisie est bloquée jusqu'à l'abonnement. Les données d'un patient ne sont jamais
+rendues inaccessibles à son praticien.
 
 ### Ce que fait déjà le serveur
 
-- **Comptes** : comptes nominatifs, mots de passe d'au moins 12 caractères stockés sous forme
-  d'empreinte scrypt, double authentification obligatoire (TOTP).
-- **Protection des connexions** : blocage de 15 minutes après 5 échecs, limitation du nombre de
-  tentatives par adresse IP.
-- **Sessions** : cookie inaccessible aux scripts, limité au site et transmis en HTTPS seulement.
-  Expiration après la durée d'inactivité choisie dans les réglages, et au plus tard après 12 heures.
-- **Cloisonnement** : il est appliqué par le serveur. Un praticien ne reçoit que ses dossiers, et toute
-  écriture hors de son périmètre est refusée.
-- **Super-administrateur** : il ne voit que des chiffres. Pour consulter les dossiers d'un praticien, il
-  ouvre un accès exceptionnel motivé, limité à une heure et consigné.
-- **Journal d'audit** : tenu par le serveur et protégé contre la modification et la suppression au
-  niveau de la base.
+- **Cloisonnement** : chaque cabinet est isolé des autres, et chaque praticien n'accède qu'à ses
+  dossiers. C'est le serveur qui l'impose.
+- **Console du propriétaire** : elle ne reçoit que des informations administratives (cabinets,
+  fondateurs, abonnements), jamais de donnée de patient.
+- **Comptes** : nominatifs, avec double authentification obligatoire et mots de passe d'au moins
+  12 caractères stockés sous forme d'empreinte scrypt.
+- **Protection des connexions** : blocage de 15 minutes après 5 échecs et limitation des tentatives
+  par adresse IP. Les inscriptions sont limitées à 10 par heure et par adresse.
+- **Sessions** : cookie inaccessible aux scripts et transmis en HTTPS seulement, avec expiration
+  après inactivité.
+- **Journal d'audit** : protégé contre la modification et la suppression au niveau de la base.
+- **Paiement en ligne** : les notifications de Stripe sont vérifiées par leur signature.
 - **Sécurité du site** : HTTPS imposé, politique de sécurité du contenu stricte, aucun script ni
   aucune police chargés depuis un site tiers.
 
 ---
 
-## 3. Démarches avant le premier vrai patient, dans l'ordre
+## 3. Vos obligations en tant qu'éditeur de la plateforme
+
+Vos clients vous confient les données de santé de leurs patients. Chaque praticien reste responsable
+du traitement ; **votre société devient son sous-traitant** au sens du RGPD. Ce statut entraîne les
+obligations suivantes.
 
 | # | Démarche | Auprès de |
 | --- | --- | --- |
-| 1 | Contrat HDS signé, sauvegardes de la base incluses et testées | Hébergeur |
-| 2 | Registre des traitements (RGPD, art. 30) et analyse d'impact (art. 35) | Vous, avec un délégué à la protection des données (DPO) |
-| 3 | Contrat de sous-traitance avec l'hébergeur (art. 28) | Hébergeur |
-| 4 | Note d'information remise aux patients ; durées de conservation des dossiers | Vous (référentiel CNIL des cabinets médicaux et paramédicaux) |
-| 5 | Procédure en cas de violation de données (notification CNIL sous 72 h) | Vous |
-| 6 | Mentions légales complètes (éditeur, hébergeur, contact) | Réglages du cabinet |
-| 7 | Boîte de messagerie sécurisée MSSanté | Un opérateur MSSanté |
-| 8 | Avis sur le statut de « dispositif médical » du logiciel (suggestions de conclusion, règle de décision) **avant toute diffusion à d'autres cabinets** | Consultant réglementaire / ANSM |
+| 1 | Créer une société (forme juridique, compte bancaire, TVA) | Expert-comptable |
+| 2 | Contrat HDS avec l'hébergeur, sauvegardes incluses et testées | Hébergeur |
+| 3 | **Vérifier si votre société doit être certifiée HDS elle-même** : l'administration et l'exploitation de l'application font partie du périmètre de la certification. Sinon, confiez-les à un prestataire certifié qui les couvre | Organisme certificateur, ou conseil spécialisé |
+| 4 | Conditions générales d'utilisation et de vente, et **contrat de traitement des données (RGPD, art. 28)** avec chaque cabinet | Avocat |
+| 5 | Registre des traitements (art. 30), analyse d'impact (art. 35), procédure de violation de données (72 h) | Vous, avec un délégué à la protection des données |
+| 6 | Mentions légales complètes (éditeur, hébergeur, contact) | Console → Offre et inscriptions |
+| 7 | **Faire valider le parrainage** au regard de l'encadrement des avantages offerts aux professionnels de santé (Code de la santé publique, art. L. 1453-3 et suivants). Les mois offerts sur l'abonnement sont la forme la plus prudente | Avocat en droit de la santé |
+| 8 | **Statut de dispositif médical** : les suggestions de conclusion et la règle de décision thérapeutique peuvent faire relever SACCADES de cette réglementation | Consultant réglementaire / ANSM |
 
-### Ensuite, pour aller plus loin
+### Pour aller plus loin
 
-- **Pro Santé Connect** (connexion par e-CPS ou carte CPS) : raccordement à demander à l'Agence du
-  numérique en santé. Il remplacera la double authentification actuelle.
-- **Identité nationale de santé (INS)** : intégration du téléservice INSi, nécessaire pour échanger
-  automatiquement avec Mon espace santé.
-- **Envoi direct MSSanté et Mon espace santé depuis SACCADES** : référencement du logiciel auprès de
-  l'Agence du numérique en santé. En attendant, l'envoi se fait depuis la messagerie MSSanté et
-  SACCADES enregistre la date et les destinataires.
+- **Pro Santé Connect** (connexion par e-CPS ou carte CPS) : raccordement auprès de l'Agence du
+  numérique en santé.
+- **Identité nationale de santé (INS)** : intégration du téléservice INSi.
+- **Envoi direct MSSanté et Mon espace santé** : référencement du logiciel auprès de l'Agence du
+  numérique en santé.
 - **Télétransmission SESAM-Vitale** : elle exige un logiciel agréé. SACCADES suit les actes mais ne
   télétransmet pas.
 
-Ces repères ne remplacent pas l'avis d'un délégué à la protection des données ou d'un conseil juridique.
+Ces repères ne remplacent pas l'avis d'un avocat, d'un délégué à la protection des données ou d'un
+consultant réglementaire.

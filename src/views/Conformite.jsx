@@ -51,10 +51,10 @@ function Synthese() {
         <Card>
           <CardHead icon={ShieldCheck} title={SERVEUR ? 'Mis en œuvre par le logiciel' : 'Mis en œuvre dans cette démonstration'} />
           <ul className="flex flex-col gap-3 px-4 py-4">
-            <Point ok titre="Comptes nominatifs et rôles.">{praticiens.length} praticien{praticiens.length > 1 ? 's' : ''} et un super-administrateur, chacun avec son identifiant.</Point>
+            <Point ok titre="Comptes nominatifs et rôles.">{praticiens.length} praticien{praticiens.length > 1 ? 's' : ''} et un administrateur du cabinet, chacun avec son identifiant.</Point>
             {SERVEUR && <Point ok titre="Double authentification.">Mot de passe d'au moins 12 caractères et code à usage unique (application d'authentification) à chaque connexion.</Point>}
             <Point ok titre="Cloisonnement par praticien.">{SERVEUR ? "Appliqué par le serveur : un praticien ne reçoit jamais les dossiers d'un autre, et toute écriture hors de son périmètre est refusée." : "Chaque dossier, rendez-vous, bilan et facture est rattaché à son praticien, et l'interface ne charge que les siens."}</Point>
-            <Point ok titre="Accès exceptionnel du super-administrateur.">Il ne parcourt pas les dossiers médicaux : il doit déclarer un motif, l'accès est limité dans le temps{SERVEUR ? ' (une heure)' : ''}, et son début comme sa fin sont consignés et visibles par le praticien.</Point>
+            <Point ok titre="Accès exceptionnel de l'administrateur du cabinet.">Il ne parcourt pas les dossiers médicaux : il doit déclarer un motif, l'accès est limité dans le temps{SERVEUR ? ' (une heure)' : ''}, et son début comme sa fin sont consignés et visibles par le praticien.</Point>
             <Point ok titre="Journal d'audit.">{SERVEUR ? 'Tenu par le serveur, horodaté, protégé contre la modification et la suppression : connexions, échecs, chargements et consultations de dossiers, envois, exports.' : `${global.journal.length} événements consignés : connexions, échecs, consultations de dossiers, exports, modifications.`}</Point>
             <Point ok titre="Protection de la session.">Déconnexion automatique après {global.cabinet.inactivite || 15} minutes d'inactivité, blocage temporaire après cinq échecs de connexion{SERVEUR ? ", cookie de session inaccessible aux scripts et limité au site" : ''}.</Point>
             {SERVEUR && <Point ok titre="Échanges chiffrés et en-têtes de sécurité.">HTTPS imposé, politique de sécurité du contenu stricte, aucun script ni police chargés depuis un site tiers.</Point>}
@@ -133,7 +133,7 @@ function Journal() {
         }
       />
       <p className="border-b border-line bg-surface-2 px-4 py-2 text-[12px] leading-snug text-ink-3">
-        {estAdmin ? "Vous voyez l'ensemble des événements du cabinet." : 'Vous voyez vos propres actions et tout accès à vos dossiers, y compris ceux du super-administrateur.'} Le journal ne peut être ni modifié ni vidé depuis l'application.
+        {estAdmin ? "Vous voyez l'ensemble des événements du cabinet." : "Vous voyez vos propres actions et tout accès à vos dossiers, y compris ceux de l'administrateur du cabinet."} Le journal ne peut être ni modifié ni vidé depuis l'application.
       </p>
       {lignes.length ? (
         <div className="overflow-x-auto">
@@ -278,7 +278,7 @@ function Sauvegarde() {
         <CardHead icon={Upload} title="Restaurer une sauvegarde" />
         {estAdmin && !SERVEUR ? (
           <div className="flex flex-col gap-3 px-4 py-4">
-            <p className="text-[13px] leading-relaxed text-ink-2">La restauration remplace toutes les données du cabinet par celles du fichier. Elle est réservée au super-administrateur et consignée au journal.</p>
+            <p className="text-[13px] leading-relaxed text-ink-2">La restauration remplace toutes les données du cabinet par celles du fichier. Elle est réservée à l'administrateur du cabinet et consignée au journal.</p>
             <Field label="Fichier de sauvegarde (.json)" htmlFor="sv-fichier">
               <input ref={champ} id="sv-fichier" type="file" accept=".json,application/json" className="inp !py-1" onChange={lire} />
             </Field>
@@ -298,7 +298,7 @@ function Sauvegarde() {
             </div>
           </div>
         ) : (
-          <p className="px-4 py-4 text-[13px] leading-relaxed text-ink-2">{SERVEUR ? "Les données du cabinet sont restaurées par l'hébergeur, à partir de ses sauvegardes. Votre export personnel sert de copie de sécurité et de réponse à une demande de portabilité d'un patient." : "La restauration remplace l'ensemble des données du cabinet : elle est réservée au super-administrateur. Votre sauvegarde personnelle sert de copie de sécurité et de réponse à une demande de portabilité."}</p>
+          <p className="px-4 py-4 text-[13px] leading-relaxed text-ink-2">{SERVEUR ? "Les données du cabinet sont restaurées par l'hébergeur, à partir de ses sauvegardes. Votre export personnel sert de copie de sécurité et de réponse à une demande de portabilité d'un patient." : "La restauration remplace l'ensemble des données du cabinet : elle est réservée à l'administrateur du cabinet. Votre sauvegarde personnelle sert de copie de sécurité et de réponse à une demande de portabilité."}</p>
         )}
       </Card>
     </div>

@@ -3,6 +3,7 @@ import { addDays, fusion, parseISO, todayISO } from './lib.js';
 import { BAREME_DEFAUT, MOTIFS, NORMES_DEFAUT, acteDe, bilanVide, calculFacture, valeurAMY } from './domain.js';
 import { genererCorps } from './letter.js';
 import { creerAuth } from './crypto.js';
+import { OFFRE_DEFAUT } from './offre.js';
 
 export const MOT_DE_PASSE_DEMO = 'demo';
 export const CABINET_DEMO = {
@@ -17,8 +18,9 @@ export const CABINET_DEMO = {
 };
 
 const utilisateursDemo = () => [
-  { id: 'u_admin', role: 'admin', identifiant: 'admin', prenom: '', nom: 'Super-Admin', titre: 'Administration du cabinet', rpps: '', actif: true, demo: true, derniereConnexion: 0, auth: creerAuth(MOT_DE_PASSE_DEMO, '5ac0adecab1e0000') },
-  { id: 'u_camille', role: 'praticien', identifiant: 'camille.roussel', prenom: 'Camille', nom: 'Roussel', titre: 'Orthoptiste', rpps: '10 00 00 00 01 0 (fictif)', actif: true, demo: true, derniereConnexion: 0, auth: creerAuth(MOT_DE_PASSE_DEMO, '5ac0adecab1e0001') },
+  { id: 'u_proprio', role: 'plateforme', identifiant: 'proprietaire', prenom: '', nom: 'Propriétaire de SACCADES', titre: 'Plateforme', rpps: '', actif: true, demo: true, derniereConnexion: 0, auth: creerAuth(MOT_DE_PASSE_DEMO, '5ac0adecab1e0003') },
+  { id: 'u_admin', role: 'admin', identifiant: 'admin', prenom: '', nom: 'Administrateur', titre: 'Administration du cabinet', rpps: '', actif: true, demo: true, derniereConnexion: 0, auth: creerAuth(MOT_DE_PASSE_DEMO, '5ac0adecab1e0000') },
+  { id: 'u_camille', role: 'praticien', gestionnaire: true, identifiant: 'camille.roussel', prenom: 'Camille', nom: 'Roussel', titre: 'Orthoptiste', rpps: '10 00 00 00 01 0 (fictif)', actif: true, demo: true, derniereConnexion: 0, auth: creerAuth(MOT_DE_PASSE_DEMO, '5ac0adecab1e0001') },
   { id: 'u_julien', role: 'praticien', identifiant: 'julien.marchetti', prenom: 'Julien', nom: 'Marchetti', titre: 'Orthoptiste', rpps: '10 00 00 00 02 0 (fictif)', actif: true, demo: true, derniereConnexion: 0, auth: creerAuth(MOT_DE_PASSE_DEMO, '5ac0adecab1e0002') },
 ];
 
@@ -196,6 +198,26 @@ export function rdvsDemo(T = todayISO()) {
   return out;
 }
 
+/* ---------- Plateforme : cabinets inscrits, offre, parrainages (démonstration) ---------- */
+function plateformeDemo(j) {
+  const le = (iso) => parseISO(iso).getTime() + 10 * 3600 * 1000;
+  const cab = (x) => ({ essaiFin: '', accesJusqu: '', parrainId: null, abonnementStatut: null, premierPaiement: 0, valideLe: 0, stripe: false, ...x });
+  return {
+    offre: { ...OFFRE_DEFAUT, inscriptionsOuvertes: true, contact: 'contact@saccades.example', cgu: 'Conditions générales de démonstration : à remplacer par le texte validé par votre juriste.' },
+    paiementEnLigne: false,
+    cabinets: [
+      cab({ id: 'c_demo', nom: CABINET_DEMO.nom, ville: 'Lyon', statut: 'actif', essaiFin: j(36), accesJusqu: j(67), codeParrainage: 'SAC-TILLEU', contactEmail: 'contact@orthoptie-tilleuls.example', fondateurRpps: '10000000010', cree: le(j(-56)), valideLe: le(j(-55)), fondateur: { nom: 'Camille Roussel', email: 'camille.roussel@exemple.example', rpps: '10000000010' }, praticiens: 2 }),
+      cab({ id: 'c_vsud', nom: 'Vision Sud', ville: 'Villeurbanne', statut: 'actif', essaiFin: j(-12), accesJusqu: j(49), codeParrainage: 'SAC-VSUD42', parrainId: 'c_demo', abonnementStatut: 'active', premierPaiement: le(j(-11)), stripe: true, contactEmail: 'contact@visionsud.example', fondateurRpps: '10000000020', cree: le(j(-104)), valideLe: le(j(-102)), fondateur: { nom: 'Sarah Benoît', email: 'sarah.benoit@exemple.example', rpps: '10000000020' }, praticiens: 1 }),
+      cab({ id: 'c_parc', nom: 'Orthoptie du Parc', ville: 'Bron', statut: 'en_attente', codeParrainage: 'SAC-PARC07', parrainId: 'c_demo', contactEmail: 'lou.martinez@exemple.example', fondateurRpps: '10000000030', cree: le(j(-1)), fondateur: { nom: 'Lou Martinez', email: 'lou.martinez@exemple.example', rpps: '10000000030' }, praticiens: 1 }),
+      cab({ id: 'c_lum', nom: 'Cabinet Lumière', ville: 'Grenoble', statut: 'actif', essaiFin: j(-3), accesJusqu: j(-3), codeParrainage: 'SAC-LUMI88', contactEmail: 'contact@cabinet-lumiere.example', fondateurRpps: '10000000040', cree: le(j(-95)), valideLe: le(j(-94)), fondateur: { nom: 'Paul Fabre', email: 'paul.fabre@exemple.example', rpps: '10000000040' }, praticiens: 2 }),
+    ],
+    parrainages: [
+      { filleulId: 'c_vsud', parrainId: 'c_demo', statut: 'recompense' },
+      { filleulId: 'c_parc', parrainId: 'c_demo', statut: 'en_attente' },
+    ],
+  };
+}
+
 export function etatDemo() {
   const T = todayISO();
   const j = (n) => addDays(T, n);
@@ -259,5 +281,5 @@ export function etatDemo() {
     { ts: le(j(-3), 9, 31), userId: 'u_julien', action: 'patient.consultation', praticienId: 'u_julien', cible: 'Robert LEMAIRE' },
   ].map((e, i) => ({ id: `j_demo${i}`, demo: true, ...e }));
 
-  return { version: 2, cabinet, normes, bareme, utilisateurs, patients, rdvs: rdvsDemo(T), bilans, factures, journal, compteurFacture: n };
+  return { version: 3, cabinet, normes, bareme, utilisateurs, patients, rdvs: rdvsDemo(T), bilans, factures, journal, compteurFacture: n, plateforme: plateformeDemo(j) };
 }

@@ -18,14 +18,18 @@ chiffrée, consentements).
 Aucune des trois ne charge de script ni de police depuis un site tiers : React, jsPDF et les polices
 sont intégrés.
 
-Comptes de la démonstration (mot de passe `demo`) : `admin`, `camille.roussel`, `julien.marchetti`.
+Plateforme multi-cabinets : inscription des orthoptistes (validée par le propriétaire), période gratuite,
+abonnement (paiement manuel ou Stripe), parrainage, lecture seule à l'expiration.
+
+Comptes de la démonstration (mot de passe `demo`) : `proprietaire` (console de la plateforme), `admin`,
+`camille.roussel` (praticienne et gestionnaire du cabinet), `julien.marchetti`.
 
 ## Développement
 
 ```sh
 npm install
 npm run construire        # produit les trois versions
-DATABASE_URL=postgres://… ADMIN_MOT_DE_PASSE='au-moins-12-caracteres' npm start
+DATABASE_URL=postgres://… PROPRIETAIRE_MOT_DE_PASSE='au-moins-12-caracteres' npm start
 ```
 
 | Dossier ou fichier | Rôle |
@@ -34,7 +38,9 @@ DATABASE_URL=postgres://… ADMIN_MOT_DE_PASSE='au-moins-12-caracteres' npm star
 | `src/letter.js` | Rédaction du compte-rendu (règles fixes, sans intelligence artificielle) |
 | `src/main.jsx` | Connexion, rôles, navigation, synchronisation avec le serveur |
 | `src/views/` | Écrans : agenda, patients, bilans, facturation, conformité, administration |
-| `server/api.js` | API : authentification, double authentification, cloisonnement, journal |
+| `server/api.js` | API : inscription, authentification, cloisonnement des cabinets, abonnement, parrainage, journal |
+| `server/stripe.js` | Paiement en ligne (facultatif) et vérification des notifications signées |
+| `src/offre.js` | Période gratuite, état de l'abonnement, mois offerts |
 | `server/schema.sql` | Schéma PostgreSQL (journal protégé contre la modification) |
 | `Procfile`, `.env.exemple` | Déploiement (Scalingo ou tout hébergeur Node.js certifié HDS) |
 

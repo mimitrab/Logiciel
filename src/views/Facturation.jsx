@@ -279,7 +279,7 @@ export function Bareme({ bareme, valeur, zone }) {
         ))}
       </div>
       <p className="border-t border-line px-4 py-2.5 text-[12px] leading-snug text-ink-3">
-        Prise en charge standard : 60 % par la Sécurité sociale, le reste par la mutuelle si le patient en a une. Les libellés et la zone tarifaire se règlent dans les réglages du cabinet (super-administrateur).
+        Prise en charge standard : 60 % par la Sécurité sociale, le reste par la mutuelle si le patient en a une. Les libellés et la zone tarifaire se règlent dans les réglages du cabinet (gestion du cabinet).
       </p>
     </Card>
   );

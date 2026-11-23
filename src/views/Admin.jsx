@@ -1,4 +1,4 @@
-// Espace du super-administrateur : supervision chiffrée du cabinet, comptes, réglages.
+// Espace de l'administrateur du cabinet : supervision chiffrée du cabinet, comptes, réglages.
 import React, { useState } from 'react';
 import { Check, KeyRound, Pencil, RotateCcw, ShieldAlert, UserPlus, UserRound } from 'lucide-react';
 import { Area, Btn, Card, CardHead, Chip, ConfirmBtn, Field, Modal, Notice, Num, Pill, Segmented, Select, Text, cx, useApp } from '../ui.jsx';
@@ -62,7 +62,7 @@ export function Supervision() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <p className="eyebrow">Super-administrateur</p>
+        <p className="eyebrow">Administrateur du cabinet</p>
         <h1 className="mt-1 text-[25px] font-bold leading-tight text-ink">Supervision du cabinet</h1>
         <p className="mt-1 max-w-3xl text-[13.5px] text-ink-2">Activité de chaque praticien, en chiffres. Aucun nom de patient n'apparaît ici : pour intervenir sur un dossier, ouvrez un accès exceptionnel motivé.</p>
       </div>
@@ -137,7 +137,8 @@ export function Supervision() {
 const LONGUEUR = SERVEUR ? 12 : 10;
 function CompteForm({ compte, onClose }) {
   const { global, actions } = useApp();
-  const [u, setU] = useState(compte || { id: '', role: 'praticien', identifiant: '', prenom: '', nom: '', titre: 'Orthoptiste', rpps: '' });
+  const { user } = useApp();
+  const [u, setU] = useState(compte || { id: '', role: 'praticien', gestionnaire: false, identifiant: '', prenom: '', nom: '', titre: 'Orthoptiste', rpps: '' });
   const [mdp, setMdp] = useState('');
   const [essai, setEssai] = useState(false);
   const set = (k) => (v) => setU((x) => ({ ...x, [k]: v }));
@@ -172,8 +173,13 @@ function CompteForm({ compte, onClose }) {
         <Field label="Nom" htmlFor="cf-nom"><Text id="cf-nom" value={u.nom} onChange={set('nom')} /></Field>
         <Field label="Identifiant de connexion" htmlFor="cf-identifiant"><Text id="cf-identifiant" className="num" autoCapitalize="none" spellCheck="false" value={u.identifiant} onChange={set('identifiant')} placeholder="prenom.nom" /></Field>
         <Field label="Rôle" htmlFor="cf-role">
-          <Select id="cf-role" value={u.role} onChange={set('role')} placeholder={null} disabled={!!compte} options={[['praticien', 'Praticien : ses propres dossiers'], ['admin', 'Super-administrateur']]} />
+          <Select id="cf-role" value={u.role} onChange={set('role')} placeholder={null} disabled={!!compte} options={[['praticien', 'Praticien : ses propres dossiers'], ['admin', 'Administrateur : supervision, sans dossiers']]} />
         </Field>
+        {u.role === 'praticien' && (
+          <div className="sm:col-span-2">
+            <Chip id="cf-gestionnaire" checked={!!u.gestionnaire} disabled={!!compte && compte.id === user.id} onChange={set('gestionnaire')}>Gestionnaire du cabinet : comptes, réglages, abonnement</Chip>
+          </div>
+        )}
         <Field label="Titre" htmlFor="cf-titre"><Text id="cf-titre" value={u.titre} onChange={set('titre')} /></Field>
         <Field label="N° RPPS" htmlFor="cf-rpps"><Text id="cf-rpps" value={u.rpps} onChange={set('rpps')} /></Field>
         <Field label={compte ? 'Réinitialiser le mot de passe (facultatif)' : 'Mot de passe provisoire'} htmlFor="cf-mdp" className="sm:col-span-2" hint={SERVEUR ? 'À transmettre par un canal sûr. Il devra être changé à la première connexion, avec activation de la double authentification.' : 'À transmettre à la personne par un canal sûr. Elle le changera depuis « Mon compte ».'}>
@@ -191,7 +197,7 @@ export function Utilisateurs() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="eyebrow">Super-administrateur</p>
+          <p className="eyebrow">Administrateur du cabinet</p>
           <h1 className="mt-1 text-[25px] font-bold leading-tight text-ink">Utilisateurs</h1>
           <p className="mt-1 max-w-3xl text-[13.5px] text-ink-2">Chaque praticien a son compte, son agenda, ses patients, ses bilans et sa facturation. Un compte désactivé ne peut plus se connecter ; ses dossiers sont conservés.</p>
         </div>
@@ -213,7 +219,7 @@ export function Utilisateurs() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {global.utilisateurs.map((u) => (
+              {global.utilisateurs.filter((u) => u.role !== 'plateforme').map((u) => (
                 <tr key={u.id} className="align-middle">
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-2.5">
@@ -227,7 +233,7 @@ export function Utilisateurs() {
                     </span>
                   </td>
                   <td className="px-2 py-2.5 font-mono text-[12.5px] text-ink-2">{u.identifiant}</td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-ink-2">{u.role === 'admin' ? 'Super-administrateur' : 'Praticien'}</td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-ink-2">{u.role === 'admin' ? 'Administrateur' : u.gestionnaire ? 'Praticien, gestionnaire' : 'Praticien'}</td>
                   <td className="tnum px-2 py-2.5 text-right font-mono text-ink-2">{u.role === 'admin' ? '—' : statsDe(global, u.id).patients}</td>
                   <td className="tnum whitespace-nowrap px-2 py-2.5 font-mono text-[12.5px] text-ink-2">{u.derniereConnexion ? horodatage(u.derniereConnexion) : 'Jamais'}</td>
                   {SERVEUR && <td className="px-2 py-2.5"><Pill tone={u.mfa ? 'ok' : 'warn'}>{u.mfa ? 'Activée' : 'À activer'}</Pill></td>}
@@ -278,7 +284,7 @@ export function Reglages() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="eyebrow">Super-administrateur</p>
+          <p className="eyebrow">Administrateur du cabinet</p>
           <h1 className="mt-1 text-[25px] font-bold leading-tight text-ink">Réglages du cabinet</h1>
           <p className="mt-1 max-w-3xl text-[13.5px] text-ink-2">Coordonnées reprises dans les comptes-rendus, tarification, sécurité des sessions, normes cliniques et barème NGAP.</p>
         </div>
@@ -289,13 +295,15 @@ export function Reglages() {
         <Card>
           <CardHead title="Coordonnées du cabinet" hint="en-tête des comptes-rendus" />
           <div className="grid gap-3 px-4 py-4 sm:grid-cols-2">
-            <p className="text-[12px] text-ink-3 sm:col-span-2">Les mentions légales, visibles depuis la page de connexion, sont en bas de ce bloc.</p>
+            {!SERVEUR && <p className="text-[12px] text-ink-3 sm:col-span-2">Les mentions légales, visibles depuis la page de connexion, sont en bas de ce bloc.</p>}
             <Field label="Nom du cabinet" htmlFor="rg-nom" className="sm:col-span-2"><Text id="rg-nom" value={c.nom} onChange={set('nom')} /></Field>
             <Field label="Adresse" htmlFor="rg-adresse" className="sm:col-span-2"><Text id="rg-adresse" value={c.adresse} onChange={set('adresse')} /></Field>
             <Field label="Code postal" htmlFor="rg-cp"><Text id="rg-cp" value={c.cp} onChange={set('cp')} /></Field>
             <Field label="Ville" htmlFor="rg-ville"><Text id="rg-ville" value={c.ville} onChange={set('ville')} /></Field>
             <Field label="Téléphone" htmlFor="rg-tel"><Text id="rg-tel" value={c.tel} onChange={set('tel')} /></Field>
             <Field label="Courriel" htmlFor="rg-email"><Text id="rg-email" value={c.email} onChange={set('email')} /></Field>
+            {!SERVEUR && (
+              <>
             <Field label="Éditeur du site (mentions légales)" htmlFor="rg-editeur" className="sm:col-span-2" hint="Nom ou raison sociale, adresse, numéro SIRET le cas échéant.">
               <Area id="rg-editeur" value={c.editeur || ''} onChange={set('editeur')} />
             </Field>
@@ -303,6 +311,8 @@ export function Reglages() {
               <Area id="rg-hebergeur" value={c.hebergeur || ''} onChange={set('hebergeur')} />
             </Field>
             <Field label="Contact pour les données personnelles" htmlFor="rg-contact" className="sm:col-span-2"><Text id="rg-contact" value={c.contact || ''} onChange={set('contact')} placeholder="Adresse de contact ou délégué à la protection des données" /></Field>
+              </>
+            )}
           </div>
         </Card>
 

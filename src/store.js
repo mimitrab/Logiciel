@@ -1,10 +1,11 @@
 // État de l'application : persistance dans le navigateur, session, opérations métier.
 import { fusion, todayISO, uid } from './lib.js';
 import { acteDe, bilanVide, calculFacture, indicationReeducation, suggererActe, valeurAMY } from './domain.js';
+import { ajouterMois, etatAbonnement } from './offre.js';
 import { genererCorps } from './letter.js';
 import { etatDemo, rdvsDemo } from './seed.js';
 
-const CLE = 'saccades.cabinet.v2';
+const CLE = 'saccades.cabinet.v3';
 const CLE_SESSION = 'saccades.session';
 const TAILLE_JOURNAL = 1500;
 
@@ -14,7 +15,7 @@ export function charger() {
     const brut = localStorage.getItem(CLE);
     if (brut) {
       const s = JSON.parse(brut);
-      if (s && s.version === 2 && Array.isArray(s.patients) && Array.isArray(s.utilisateurs)) etat = s;
+      if (s && s.version === 3 && Array.isArray(s.patients) && Array.isArray(s.utilisateurs)) etat = s;
     }
   } catch (e) {
     etat = null;
@@ -174,12 +175,71 @@ export const ops = {
     const suivant = { ...s, cabinet: cabinet || s.cabinet, normes: normes || s.normes, bareme: bareme || s.bareme };
     return resynchroniser(suivant, () => true);
   },
+  /* ----- Console du propriétaire (démonstration) ----- */
+  plateforme(s, action, id, params = {}) {
+    const pf = s.plateforme;
+    const T = todayISO();
+    const c = pf.cabinets.find((x) => x.id === id);
+    if (!c) return s;
+    let cabinets = pf.cabinets;
+    let parrainages = pf.parrainages;
+    const modifier = (cid, f) => {
+      cabinets = cabinets.map((x) => (x.id === cid ? f(x) : x));
+    };
+    const offrir = (cid, mois) => modifier(cid, (x) => ({ ...x, accesJusqu: ajouterMois(x.accesJusqu && x.accesJusqu > T ? x.accesJusqu : T, mois) }));
+    if (action === 'valider') modifier(id, (x) => ({ ...x, statut: 'actif', valideLe: Date.now(), essaiFin: ajouterMois(T, pf.offre.essaiMois), accesJusqu: ajouterMois(T, pf.offre.essaiMois) }));
+    else if (action === 'refuser') modifier(id, (x) => ({ ...x, statut: 'refuse' }));
+    else if (action === 'suspendre') modifier(id, (x) => ({ ...x, statut: 'suspendu' }));
+    else if (action === 'reactiver') modifier(id, (x) => ({ ...x, statut: 'actif' }));
+    else if (action === 'prolonger') offrir(id, params.mois || 1);
+    else if (action === 'payer') {
+      const premier = !c.premierPaiement;
+      modifier(id, (x) => ({ ...x, accesJusqu: params.jusqu, premierPaiement: x.premierPaiement || Date.now() }));
+      const p = premier && parrainages.find((x) => x.filleulId === id && x.statut === 'en_attente');
+      if (p) {
+        offrir(p.parrainId, pf.offre.moisParrain);
+        offrir(id, pf.offre.moisFilleul);
+        parrainages = parrainages.map((x) => (x === p ? { ...x, statut: 'recompense' } : x));
+      }
+    }
+    return { ...s, plateforme: { ...pf, cabinets, parrainages } };
+  },
+  enregistrerOffre(s, offre) {
+    return { ...s, plateforme: { ...s.plateforme, offre } };
+  },
   enregistrerUtilisateur(s, u) {
     const existe = s.utilisateurs.some((x) => x.id === u.id);
     const suivant = { ...s, utilisateurs: existe ? maj(s.utilisateurs, u.id, () => u) : [...s.utilisateurs, u] };
     return resynchroniser(suivant, (b) => b.praticienId === u.id);
   },
 };
+
+/** Abonnement du cabinet de démonstration, calculé à partir des données de la console du propriétaire. */
+export function abonnementDemo(s) {
+  const pf = s && s.plateforme;
+  const c = pf && pf.cabinets.find((x) => x.id === 'c_demo');
+  if (!c) return null;
+  const cabinet = { ...c, nom: s.cabinet.nom };
+  const praticiens = s.utilisateurs.filter((u) => u.role === 'praticien' && u.actif).length;
+  return {
+    ...etatAbonnement(cabinet),
+    cabinet,
+    prixMensuelHT: pf.offre.prixMensuelHT,
+    essaiMois: pf.offre.essaiMois,
+    moisParrain: pf.offre.moisParrain,
+    moisFilleul: pf.offre.moisFilleul,
+    contact: pf.offre.contact,
+    praticiens: Math.max(1, praticiens),
+    paiementEnLigne: false,
+    codeParrainage: c.codeParrainage,
+    filleuls: pf.parrainages
+      .filter((p) => p.parrainId === c.id)
+      .map((p) => {
+        const f = pf.cabinets.find((x) => x.id === p.filleulId) || {};
+        return { nom: f.nom, ville: f.ville, cree: f.cree, statut: p.statut };
+      }),
+  };
+}
 
 /** Acte proposé pour facturer un bilan donné. */
 export function acteDuBilan(s, bilan) {

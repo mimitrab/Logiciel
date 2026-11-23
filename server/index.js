@@ -6,7 +6,7 @@ const { default: express } = await import('express');
 const path = await import('node:path');
 const { fileURLToPath } = await import('node:url');
 const { initialiser } = await import('./db.js');
-const { routeur } = await import('./api.js');
+const { routeur, webhookStripe } = await import('./api.js');
 
 const ici = path.dirname(fileURLToPath(import.meta.url));
 const PROD = process.env.NODE_ENV === 'production';
@@ -43,6 +43,8 @@ app.use((req, res, next) => {
   return next();
 });
 
+// Stripe signe le corps brut de ses notifications : cette route le reçoit tel quel.
+app.post('/api/stripe/webhook', express.raw({ type: '*/*', limit: '1mb' }), webhookStripe);
 app.use('/api', express.json({ limit: '4mb' }), routeur);
 app.use(express.static(path.join(ici, 'public'), { index: false, maxAge: PROD ? '1h' : 0 }));
 app.get('*', (req, res) => {

@@ -2,18 +2,20 @@
 // En production (mode serveur) : mot de passe, double authentification par application (TOTP),
 // changement du mot de passe provisoire. Objectif à terme : Pro Santé Connect (e-CPS, carte CPS).
 import React, { useEffect, useState } from 'react';
-import { KeyRound, Lock, LogIn, ShieldCheck, Smartphone, UserRound } from 'lucide-react';
+import { Building2, Gift, KeyRound, Lock, LogIn, ShieldCheck, Smartphone, UserPlus, UserRound } from 'lucide-react';
 import { Btn, Field, Logo, Text, cx } from '../ui.jsx';
 import { nomUtilisateur } from '../domain.js';
 import { MOT_DE_PASSE_DEMO } from '../seed.js';
 import { SERVEUR } from '../mode.js';
 import { api } from '../api.js';
 import Mentions from './Mentions.jsx';
+import Inscription from './Inscription.jsx';
 
 const ESSAIS_MAX = 5;
 const BLOCAGE_S = 60;
 
-function Cadre({ cabinet, children }) {
+function Cadre({ infos = {}, children }) {
+  const o = infos.offre;
   const [mentions, setMentions] = useState(false);
   return (
     <div className="h-full overflow-y-auto bg-bg">
@@ -27,7 +29,7 @@ function Cadre({ cabinet, children }) {
             </div>
           </div>
           <p className="mt-5 text-[14px] leading-relaxed text-ink-2">
-            Agenda, dossiers patients, bilans orthoptiques et comptes-rendus, facturation NGAP. Chaque praticien accède à ses seuls dossiers ; le super-administrateur supervise le cabinet.
+            Agenda, dossiers patients, bilans orthoptiques et comptes-rendus, facturation NGAP. Chaque praticien accède à ses seuls dossiers, et chaque cabinet est isolé des autres.
           </p>
           <p className="mt-4 flex items-start gap-2 rounded-lg border border-line bg-surface px-3.5 py-3 text-[12.5px] leading-relaxed text-ink-2">
             <ShieldCheck size={16} className="mt-0.5 flex-none text-accent" aria-hidden="true" />
@@ -37,17 +39,25 @@ function Cadre({ cabinet, children }) {
                 : "Démonstration : patients fictifs, données conservées dans votre navigateur, connexion simulée. N'y saisissez aucune donnée réelle."}
             </span>
           </p>
+          {o && (
+            <p className="mt-3 flex items-start gap-2 rounded-lg border border-accent bg-accent-soft px-3.5 py-3 text-[12.5px] leading-relaxed text-ink">
+              <Gift size={16} className="mt-0.5 flex-none text-accent" aria-hidden="true" />
+              <span>
+                <span className="font-semibold">{o.essaiMois} mois gratuits</span>, puis {o.prixMensuelHT} € HT par mois et par praticien, sans engagement. Parrainage : {o.moisParrain} mois offert{o.moisParrain > 1 ? 's' : ''} pour vous et {o.moisFilleul} pour votre confrère, dès qu'il s'abonne.
+              </span>
+            </p>
+          )}
           <button type="button" onClick={() => setMentions(true)} className="mt-3 rounded text-[12.5px] font-medium text-accent hover:underline">Mentions légales et confidentialité</button>
         </div>
         <div className="card flex-1 p-5 sm:p-6">{children}</div>
       </div>
-      {mentions && <Mentions cabinet={cabinet} onClose={() => setMentions(false)} />}
+      {mentions && <Mentions cabinet={infos} onClose={() => setMentions(false)} />}
     </div>
   );
 }
 
 /* ---------- Démonstration : connexion locale ---------- */
-function ConnexionDemo({ utilisateurs, cabinet, onLogin }) {
+function ConnexionDemo({ utilisateurs, cabinet, plateforme, onLogin }) {
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
   const [erreur, setErreur] = useState('');
@@ -77,7 +87,7 @@ function ConnexionDemo({ utilisateurs, cabinet, onLogin }) {
   const demos = utilisateurs.filter((u) => u.demo && u.actif);
 
   return (
-    <Cadre cabinet={cabinet}>
+    <Cadre infos={{ ...cabinet, offre: plateforme && plateforme.offre }}>
       <h2 className="text-[17px] font-semibold text-ink">Connexion</h2>
       <p className="mt-0.5 text-[12.5px] text-ink-3">{cabinet.nom}</p>
       <form className="mt-4 grid gap-3" onSubmit={(e) => { e.preventDefault(); tenter(identifiant, motDePasse); }}>
@@ -104,12 +114,12 @@ function ConnexionDemo({ utilisateurs, cabinet, onLogin }) {
             {demos.map((u) => (
               <li key={u.id}>
                 <button type="button" disabled={reste > 0} onClick={() => tenter(u.identifiant, MOT_DE_PASSE_DEMO)} className="flex w-full items-center gap-3 rounded-md border border-line px-3 py-2 text-left transition-colors hover:border-line-strong hover:bg-surface-2 disabled:opacity-50">
-                  <span className={cx('inline-flex h-8 w-8 flex-none items-center justify-center rounded-full', u.role === 'admin' ? 'bg-warn-soft text-warn' : 'bg-accent-soft text-accent-strong')}>
-                    {u.role === 'admin' ? <ShieldCheck size={16} aria-hidden="true" /> : <UserRound size={16} aria-hidden="true" />}
+                  <span className={cx('inline-flex h-8 w-8 flex-none items-center justify-center rounded-full', u.role === 'plateforme' ? 'bg-plum-soft text-plum' : u.role === 'admin' ? 'bg-warn-soft text-warn' : 'bg-accent-soft text-accent-strong')}>
+                    {u.role === 'plateforme' ? <Building2 size={16} aria-hidden="true" /> : u.role === 'admin' ? <ShieldCheck size={16} aria-hidden="true" /> : <UserRound size={16} aria-hidden="true" />}
                   </span>
                   <span className="min-w-0 flex-1 leading-tight">
                     <span className="block truncate text-[13.5px] font-medium text-ink">{nomUtilisateur(u)}</span>
-                    <span className="block truncate text-[12px] text-ink-3">{u.role === 'admin' ? 'Super-administrateur : supervision, comptes, conformité' : `${u.titre} : son agenda, ses patients, ses bilans`}</span>
+                    <span className="block truncate text-[12px] text-ink-3">{u.role === 'plateforme' ? 'Vous, propriétaire : inscriptions, abonnements, parrainages' : u.role === 'admin' ? 'Administrateur du cabinet : supervision, comptes' : `${u.titre}${u.gestionnaire ? ', gestionnaire du cabinet' : ''} : ses patients, ses bilans`}</span>
                   </span>
                   <span className="font-mono text-[11.5px] text-ink-3">{u.identifiant}</span>
                 </button>
@@ -125,7 +135,13 @@ function ConnexionDemo({ utilisateurs, cabinet, onLogin }) {
 /* ---------- Production : connexion par le serveur ---------- */
 function ConnexionServeur({ etapeInitiale, onConnecte }) {
   const [etape, setEtape] = useState(etapeInitiale || 'identifiants');
-  const [cabinet, setCabinet] = useState({ nom: '' });
+  const [infos, setInfos] = useState({});
+  // Le code de parrainage du lien est lu une fois, puis retiré de l'adresse.
+  const [parrain] = useState(() => new URLSearchParams(window.location.search).get('parrain') || '');
+  const [ecran, setEcran] = useState(parrain ? 'inscription' : 'connexion');
+  useEffect(() => {
+    if (parrain) window.history.replaceState(null, '', window.location.pathname);
+  }, []);
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
   const [code, setCode] = useState('');
@@ -136,7 +152,7 @@ function ConnexionServeur({ etapeInitiale, onConnecte }) {
   const [occupe, setOccupe] = useState(false);
 
   useEffect(() => {
-    api.get('/public').then((r) => setCabinet(r.cabinet || {})).catch(() => {});
+    api.get('/public').then((r) => setInfos(r.plateforme || {})).catch(() => {});
   }, []);
   useEffect(() => {
     if (etape !== 'mfa-activation' || activation) return;
@@ -228,15 +244,35 @@ function ConnexionServeur({ etapeInitiale, onConnecte }) {
   }
 
   const titres = { identifiants: 'Connexion', mfa: 'Double authentification', 'mfa-activation': 'Activer la double authentification', changer: 'Nouveau mot de passe' };
+  if (ecran === 'inscription' && etape === 'identifiants') {
+    return (
+      <Cadre infos={infos}>
+        {infos.inscriptions ? (
+          <Inscription infos={infos} codeInitial={parrain.toUpperCase()} onRetour={() => setEcran('connexion')} />
+        ) : (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[17px] font-semibold text-ink">Inscriptions bientôt ouvertes</h2>
+            <p className="text-[13.5px] text-ink-2">Les inscriptions ne sont pas encore ouvertes. Revenez dans quelques jours{infos.contact ? `, ou écrivez à ${infos.contact}` : ''}.</p>
+            <Btn onClick={() => setEcran('connexion')}>Retour à la connexion</Btn>
+          </div>
+        )}
+      </Cadre>
+    );
+  }
   return (
-    <Cadre cabinet={cabinet}>
+    <Cadre infos={infos}>
       <h2 className="text-[17px] font-semibold text-ink">{titres[etape]}</h2>
-      {cabinet.nom && <p className="mt-0.5 text-[12.5px] text-ink-3">{cabinet.nom}</p>}
       {contenu}
       {erreur && (
         <p className="mt-3 flex items-center gap-1.5 text-[12.5px] text-danger" role="alert">
           <Lock size={13} aria-hidden="true" /> {erreur}
         </p>
+      )}
+      {etape === 'identifiants' && infos.inscriptions && (
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="text-[13px] text-ink-2">Orthoptiste, vous n'avez pas encore de compte ?</p>
+          <Btn className="mt-2" icon={UserPlus} onClick={() => setEcran('inscription')}>Créer le compte de votre cabinet</Btn>
+        </div>
       )}
       {etape !== 'identifiants' && (
         <button type="button" className="mt-4 rounded text-[12.5px] font-medium text-ink-3 hover:text-ink" onClick={() => { api.post('/deconnexion').catch(() => {}); setEtape('identifiants'); setErreur(''); }}>

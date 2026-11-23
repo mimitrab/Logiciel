@@ -3,12 +3,12 @@
 // et chaque modification est synchronisée ; le serveur applique lui-même le cloisonnement.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Activity, CalendarDays, ClipboardList, Cloud, CloudOff, HardDrive, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Settings, ShieldAlert, ShieldCheck, TriangleAlert, UserCog, Users } from 'lucide-react';
+import { Activity, Building2, CalendarDays, ClipboardList, Cloud, CloudOff, Euro, Gift, HardDrive, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Settings, ShieldAlert, ShieldCheck, TriangleAlert, UserCog, Users } from 'lucide-react';
 import { AppCtx, Btn, Field, IconBtn, Logo, Modal, Text, Toasts, cx } from './ui.jsx';
-import { acteDuBilan, charger, enregistrer, etatDemo, normaliser, ops, session as stockSession, vuePraticien } from './store.js';
+import { abonnementDemo, acteDuBilan, charger, enregistrer, etatDemo, normaliser, ops, session as stockSession, vuePraticien } from './store.js';
 import { acteDe, cotation, nomUtilisateur } from './domain.js';
 import { creerAuth, verifierAuth } from './crypto.js';
-import { api, differences } from './api.js';
+import { COLLECTIONS, api, differences } from './api.js';
 import { MODE, SERVEUR } from './mode.js';
 import { dateCourte, horodatage, nomComplet, todayISO, uid } from './lib.js';
 import Login from './views/Login.jsx';
@@ -19,6 +19,8 @@ import Patients from './views/Patients.jsx';
 import Bilans from './views/Bilan.jsx';
 import Facturation from './views/Facturation.jsx';
 import Conformite from './views/Conformite.jsx';
+import Abonnement from './views/Abonnement.jsx';
+import { Cabinets, Offre } from './views/Plateforme.jsx';
 import { Reglages, Supervision, Utilisateurs } from './views/Admin.jsx';
 
 const MODULES = {
@@ -31,6 +33,9 @@ const MODULES = {
   utilisateurs: { label: 'Utilisateurs', court: 'Comptes', icon: UserCog },
   conformite: { label: 'Conformité et sécurité', court: 'Conformité', icon: ShieldCheck },
   reglages: { label: 'Réglages du cabinet', court: 'Réglages', icon: Settings },
+  abonnement: { label: 'Abonnement et parrainage', court: 'Abonnement', icon: Gift },
+  cabinets: { label: 'Cabinets inscrits', court: 'Cabinets', icon: Building2 },
+  offre: { label: 'Offre et inscriptions', court: 'Offre', icon: Euro },
 };
 const CLINIQUES = ['accueil', 'agenda', 'patients', 'bilans', 'facturation'];
 const LONGUEUR_MDP = SERVEUR ? 12 : 10;
@@ -88,6 +93,7 @@ function App() {
   ref.current = state;
   const sessRef = useRef(sess);
   sessRef.current = sess;
+  const lectureRef = useRef(false);
   const [stockage, setStockage] = useState(true);
   const [sync, setSync] = useState('ok');
   const [route, setRoute] = useState({ vue: null });
@@ -165,6 +171,11 @@ function App() {
   }, []);
   useEffect(() => {
     if (!SERVEUR) return undefined;
+    const retour = new URLSearchParams(window.location.search).get('abonnement');
+    if (retour) {
+      toast(retour === 'merci' ? 'Merci : votre abonnement est enregistré. Il apparaîtra dans quelques instants.' : "Paiement annulé : rien n'a été prélevé.");
+      window.history.replaceState(null, '', window.location.pathname);
+    }
     api
       .get('/session')
       .then((r) => (r.etape === 'ok' ? chargerEtat() : setEtapeLogin(r.etape)))
@@ -189,9 +200,22 @@ function App() {
   const acces = estAdmin && sess.acces ? sess.acces : null;
   const portee = user ? (estAdmin ? (acces ? acces.praticienId : null) : user.id) : null;
   const praticien = portee ? state.utilisateurs.find((u) => u.id === portee) : null;
+  const estPlateforme = !!user && user.role === 'plateforme';
+  const gestion = !!user && (user.role === 'admin' || !!user.gestionnaire);
+  const abonnement = state && !estPlateforme ? (SERVEUR ? state.abonnement : abonnementDemo(state)) : null;
+  lectureRef.current = !!(abonnement && abonnement.lectureSeule);
 
   const actions = useMemo(() => {
-    const run = (f) => setState((s) => f(s));
+    // En lecture seule (période gratuite terminée), les modifications de dossiers sont refusées.
+    const run = (f) =>
+      setState((s) => {
+        const n = f(s);
+        if (lectureRef.current && n !== s && COLLECTIONS.some((c) => n[c] !== s[c])) {
+          setTimeout(() => toast('Lecture seule : la période gratuite est terminée. Vos dossiers restent consultables et exportables.', 'danger'));
+          return s;
+        }
+        return n;
+      });
     const moi = () => (sessRef.current ? sessRef.current.userId : null);
     const perimetre = () => {
       const s = sessRef.current;
@@ -392,7 +416,7 @@ function App() {
       async enregistrerUtilisateur(u, motDePasse) {
         const nouveau = !u.id;
         if (SERVEUR) {
-          const corps = { identifiant: u.identifiant, role: u.role, prenom: u.prenom, nom: u.nom, titre: u.titre, rpps: u.rpps, motDePasse };
+          const corps = { identifiant: u.identifiant, role: u.role, gestionnaire: !!u.gestionnaire, prenom: u.prenom, nom: u.nom, titre: u.titre, rpps: u.rpps, motDePasse };
           return serveur(() => (nouveau ? api.post('/utilisateurs', corps) : api.put(`/utilisateurs/${u.id}`, corps)), nouveau ? `Compte créé pour ${nomUtilisateur(u)}` : 'Compte mis à jour');
         }
         const complet = nouveau ? { ...u, id: uid('u'), actif: true, derniereConnexion: 0, auth: creerAuth(motDePasse) } : motDePasse ? { ...u, auth: creerAuth(motDePasse) } : u;
@@ -455,6 +479,33 @@ function App() {
         setModal(null);
       },
       recharger: () => chargerEtat(),
+
+      /* ----- Plateforme, abonnement ----- */
+      async plateforme(action, cabinetId, params = {}) {
+        const libelles = { valider: 'Compte du cabinet ouvert : la période gratuite commence.', refuser: 'Inscription refusée.', suspendre: 'Cabinet suspendu.', reactiver: 'Cabinet réactivé.', prolonger: 'Mois offert ajouté.', payer: 'Paiement enregistré.' };
+        if (SERVEUR) return serveur(() => api.post(`/plateforme/cabinets/${cabinetId}`, { action, ...params }), libelles[action]);
+        run((s) => trace(ops.plateforme(s, action, cabinetId, params), { valider: 'cabinet.validation', refuser: 'cabinet.refus', suspendre: 'cabinet.suspension', reactiver: 'cabinet.reactivation', prolonger: 'cabinet.prolongation', payer: 'abonnement.paiement' }[action], { cible: ((ref.current.plateforme.cabinets.find((c) => c.id === cabinetId)) || {}).nom }));
+        toast(libelles[action]);
+        return true;
+      },
+      async enregistrerOffre(offre) {
+        if (SERVEUR) return serveur(() => api.put('/plateforme/offre', offre), 'Offre enregistrée');
+        run((s) => trace(ops.enregistrerOffre(s, offre), 'offre.modification'));
+        toast('Offre enregistrée');
+        return true;
+      },
+      async payerEnLigne() {
+        if (!SERVEUR) {
+          toast("Démonstration : le paiement en ligne n'est pas activé.");
+          return;
+        }
+        try {
+          const r = await api.post('/abonnement/paiement');
+          window.location.assign(r.url);
+        } catch (e) {
+          toast(e.message, 'danger');
+        }
+      },
       enregistrerMaintenant: () => synchroniser(),
 
       /* ----- Navigation (la consultation d'un dossier est tracée) ----- */
@@ -492,28 +543,32 @@ function App() {
     };
   }, [user && user.id]);
 
-  const vueDonnees = useMemo(() => (!state ? null : portee ? vuePraticien(state, portee) : { ...state, patients: [], rdvs: [], bilans: [], factures: [] }), [state, portee]);
+  const vueDonnees = useMemo(() => (!state ? null : { ...(portee ? vuePraticien(state, portee) : { ...state, patients: [], rdvs: [], bilans: [], factures: [] }), abonnement }), [state, portee, abonnement]);
   const ctx = useMemo(() => ({ state: vueDonnees, global: state, user, praticien, estAdmin, acces, portee, actions, go: actions.go, toast, route }), [vueDonnees, state, user, praticien, acces, route]);
 
   if (!user) {
     if (SERVEUR && etapeLogin === 'chargement') return <p className="boot">Connexion au serveur…</p>;
     return (
       <>
-        <Login utilisateurs={state ? state.utilisateurs : []} cabinet={state ? state.cabinet : {}} onLogin={actions.connexion} etapeInitiale={etapeLogin} onConnecte={actions.connecte} />
+        <Login utilisateurs={state ? state.utilisateurs : []} cabinet={state ? state.cabinet : {}} plateforme={state ? state.plateforme : null} onLogin={actions.connexion} etapeInitiale={etapeLogin} onConnecte={actions.connecte} />
         <Toasts items={toasts} />
       </>
     );
   }
 
-  const defaut = estAdmin ? 'supervision' : 'accueil';
+  const defaut = estPlateforme ? 'cabinets' : estAdmin ? 'supervision' : 'accueil';
+  const ADMINISTRATION = ['supervision', 'utilisateurs', 'abonnement', 'conformite', 'reglages'];
+  const CABINET = gestion ? ['abonnement', 'utilisateurs', 'reglages', 'conformite'] : ['conformite'];
+  const permises = estPlateforme ? ['cabinets', 'offre'] : estAdmin ? [...(acces ? CLINIQUES : []), ...ADMINISTRATION] : [...CLINIQUES, ...CABINET];
   let vue = route.vue || defaut;
-  if (MODULES[vue].clinique && !portee) vue = defaut;
-  if (!estAdmin && ['supervision', 'utilisateurs', 'reglages'].includes(vue)) vue = defaut;
+  if (!permises.includes(vue)) vue = defaut;
 
-  const groupes = estAdmin
-    ? [...(acces ? [{ titre: `Dossiers de ${nomUtilisateur(praticien)}`, items: CLINIQUES }] : []), { titre: 'Administration', items: ['supervision', 'utilisateurs', 'conformite', 'reglages'] }]
-    : [{ items: CLINIQUES }, { titre: 'Cabinet', items: ['conformite'] }];
-  const onglets = estAdmin && !acces ? ['supervision', 'utilisateurs', 'conformite', 'reglages'] : CLINIQUES;
+  const groupes = estPlateforme
+    ? [{ titre: 'Propriétaire de SACCADES', items: ['cabinets', 'offre'] }]
+    : estAdmin
+      ? [...(acces ? [{ titre: `Dossiers de ${nomUtilisateur(praticien)}`, items: CLINIQUES }] : []), { titre: 'Administration', items: ADMINISTRATION }]
+      : [{ items: CLINIQUES }, { titre: 'Cabinet', items: CABINET }];
+  const onglets = estPlateforme ? ['cabinets', 'offre'] : estAdmin && !acces ? ADMINISTRATION : CLINIQUES;
   const horsOnglets = groupes.flatMap((g) => g.items).filter((v) => !onglets.includes(v));
   const badges = {
     bilans: vueDonnees.bilans.filter((b) => b.statut !== 'envoye').length,
@@ -549,7 +604,7 @@ function App() {
             <Logo />
             <div className="leading-tight">
               <p className="font-display text-[19px] font-bold tracking-[0.06em]">SACCADES</p>
-              <p className="truncate text-[11.5px] text-nav-ink-2">{state.cabinet.nom || "Cabinet d'orthoptie"}</p>
+              <p className="truncate text-[11.5px] text-nav-ink-2">{estPlateforme ? 'Console du propriétaire' : state.cabinet.nom || "Cabinet d'orthoptie"}</p>
             </div>
           </div>
           <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3" aria-label="Modules">
@@ -564,7 +619,7 @@ function App() {
             <div className="flex items-center justify-between gap-1">
               <div className="min-w-0 leading-tight">
                 <p className="truncate text-[13px] font-medium">{nomUtilisateur(user)}</p>
-                <p className="truncate text-[11.5px] text-nav-ink-2">{estAdmin ? 'Super-administrateur' : user.titre}</p>
+                <p className="truncate text-[11.5px] text-nav-ink-2">{estPlateforme ? 'Propriétaire de la plateforme' : estAdmin ? 'Administrateur du cabinet' : user.titre}</p>
               </div>
               <div className="flex flex-none">
                 <IconBtn icon={KeyRound} label="Mon compte" onClick={() => setModal('compte')} className="!text-nav-ink-2 hover:!bg-nav-2 hover:!text-nav-ink" />
@@ -594,6 +649,23 @@ function App() {
             </p>
           )}
           <div className="gutter mx-auto w-full max-w-[1360px] py-5 lg:py-7">
+            {abonnement && abonnement.lectureSeule && (
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-danger bg-danger-soft px-4 py-3">
+                <p className="flex min-w-0 items-start gap-2 text-[13px] leading-snug text-ink">
+                  <TriangleAlert size={16} className="mt-0.5 flex-none text-danger" aria-hidden="true" />
+                  <span>
+                    <span className="font-semibold">{abonnement.libelle}.</span> Vos dossiers restent consultables et exportables ; la saisie reprend dès l'abonnement.
+                  </span>
+                </p>
+                {gestion ? <Btn size="sm" variant="primary" onClick={() => actions.go('abonnement')}>S'abonner</Btn> : <span className="text-[12.5px] text-ink-2">Contactez la gestion de votre cabinet.</span>}
+              </div>
+            )}
+            {abonnement && abonnement.code === 'essai' && abonnement.joursRestants <= 14 && gestion && vue !== 'abonnement' && (
+              <p className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-[13px] text-ink">
+                <span>Période gratuite : plus que {abonnement.joursRestants} jour{abonnement.joursRestants > 1 ? 's' : ''}.</span>
+                <Btn size="sm" onClick={() => actions.go('abonnement')}>Voir l'abonnement</Btn>
+              </p>
+            )}
             {acces && (
               <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-warn bg-warn-soft px-4 py-3">
                 <p className="flex min-w-0 items-start gap-2 text-[13px] leading-snug text-ink">
@@ -614,6 +686,9 @@ function App() {
             {vue === 'supervision' && <Supervision />}
             {vue === 'utilisateurs' && <Utilisateurs />}
             {vue === 'reglages' && <Reglages />}
+            {vue === 'abonnement' && <Abonnement />}
+            {vue === 'cabinets' && <Cabinets />}
+            {vue === 'offre' && <Offre />}
           </div>
         </main>
 
@@ -636,7 +711,7 @@ function App() {
       {modal === 'compte' && <MonCompte onClose={() => setModal(null)} />}
       {modal === 'mentions' && <Mentions cabinet={state.cabinet} onClose={() => setModal(null)} />}
       {modal === 'menu' && (
-        <Modal size="sm" title={nomUtilisateur(user)} subtitle={estAdmin ? 'Super-administrateur' : user.titre} onClose={() => setModal(null)}>
+        <Modal size="sm" title={nomUtilisateur(user)} subtitle={estPlateforme ? 'Propriétaire de la plateforme' : estAdmin ? 'Administrateur du cabinet' : user.titre} onClose={() => setModal(null)}>
           <div className="flex flex-col gap-1">
             {horsOnglets.map((v) => {
               const m = MODULES[v];
