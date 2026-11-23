@@ -48,7 +48,13 @@ export default function Abonnement() {
           <CardHead icon={CalendarClock} title="Votre abonnement" right={<Pill tone={a.ton}>{a.libelle}</Pill>} />
           <div className="flex flex-col gap-3 px-4 py-4 text-[13.5px] leading-relaxed text-ink-2">
             {situation}
-            {a.code !== 'abonne' &&
+            {a.paiementEnLigne && a.cabinet && a.cabinet.stripe && (
+              <div>
+                <Btn icon={CreditCard} onClick={() => actions.portailAbonnement()}>Gérer mon abonnement</Btn>
+                <p className="mt-1.5 text-[12px] text-ink-3">Carte bancaire, factures, résiliation : sur le portail sécurisé de Stripe.</p>
+              </div>
+            )}
+            {a.code !== 'abonne' && !(a.cabinet && a.cabinet.stripe) &&
               (a.paiementEnLigne ? (
                 <div>
                   <Btn variant="primary" icon={CreditCard} onClick={() => actions.payerEnLigne()}>

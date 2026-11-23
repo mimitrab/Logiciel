@@ -53,7 +53,9 @@ async function bundle(mode) {
 // Le script est inséré dans une balise <script> : on neutralise les séquences qui la fermeraient.
 const enLigne = (js) => js.replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '<\\!--');
 
-const TETE = '<title>SACCADES</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n<meta name="description" content="SACCADES, logiciel de cabinet d\'orthoptie : agenda, dossiers, bilans et comptes-rendus.">';
+// Icône d’onglet : le tracé de saccade du logo, sur fond sarcelle.
+const ICONE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2313746c'/%3E%3Cpath d='M6 23h6v-6h7v-6h6' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='25' cy='11' r='2.6' fill='%23fff'/%3E%3C/svg%3E";
+const TETE = `<title>SACCADES</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n<link rel="icon" href="${ICONE}">\n<meta name="description" content="SACCADES, logiciel de cabinet d’orthoptie : agenda, dossiers patients, bilans et comptes-rendus, facturation NGAP.">`;
 const RACINE = '<div id="root"><p class="boot">Chargement de SACCADES…</p></div>';
 const doc = (tete, corps) => `<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n${tete}\n</head>\n<body>\n${corps}\n</body>\n</html>\n`;
 
@@ -64,5 +66,5 @@ writeFileSync(r('dist/saccades.html'), `${TETE}\n<style>${css}</style>\n${RACINE
 writeFileSync(r('dist/demo/index.html'), doc(`${TETE}\n<style>${css}</style>`, `${RACINE}\n<script>${enLigne(await bundle('demo'))}</script>`));
 writeFileSync(r('server/public/app.css'), css);
 writeFileSync(r('server/public/app.js'), await bundle('serveur'));
-writeFileSync(r('server/public/index.html'), doc(`${TETE}\n<meta name="robots" content="noindex">\n<link rel="stylesheet" href="/app.css">`, `${RACINE}\n<script src="/app.js" defer></script>`));
+writeFileSync(r('server/public/index.html'), doc(`${TETE}\n<link rel="stylesheet" href="/app.css">`, `${RACINE}\n<script src="/app.js" defer></script>`));
 console.log('OK  dist/saccades.html, dist/demo/index.html, server/public/');

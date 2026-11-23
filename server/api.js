@@ -7,7 +7,7 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { randomBytes } from 'node:crypto';
 import { PLATEFORME, creerReglagesCabinet, lireOffre, lireReglages, q, transaction } from './db.js';
-import { LEURRE, empreinte, hacherMotDePasse, jeton, secretTotp, uriTotp, verifierMotDePasse, verifierTotp } from './securite.js';
+import { LEURRE, empreinte, hacherMotDePasse, jeton, motDePasseProvisoire, secretTotp, uriTotp, verifierMotDePasse, verifierTotp } from './securite.js';
 import { abonnementDeFacture, finDeFacture, finDePeriode, stripe, stripeActif, verifierSignature } from './stripe.js';
 import { compter } from '../src/stats.js';
 import { MOTIFS_ACCES, ZONES } from '../src/domain.js';
@@ -90,6 +90,9 @@ const limiter = (nom, max, fenetreMin) => (req, res, next) => {
 const limiteConnexion = limiter('connexion', 30, 15);
 const limiteInscription = limiter('inscription', 10, 60);
 setInterval(() => {
+  q("delete from sessions where vu < now() - interval '1 day' or cree < now() - interval '13 hours'").catch(() => {});
+}, 60 * 60000).unref();
+setInterval(() => {
   const t = Date.now();
   for (const [cle, l] of compteurs) if (!l.some((x) => t - x < 60 * 60000)) compteurs.delete(cle);
 }, 10 * 60000).unref();
@@ -168,6 +171,7 @@ routeur.get('/public', h(async (req, res) => {
       editeur: o.editeur, hebergeur: o.hebergeur, contact: o.contact,
       inscriptions: !!(o.inscriptionsOuvertes && o.cgu.trim()),
       cgu: o.cgu,
+      annonce: o.annonce ? { texte: o.annonce, ton: o.annonceTon } : null,
       offre: { prixMensuelHT: o.prixMensuelHT, essaiMois: o.essaiMois, moisParrain: o.moisParrain, moisFilleul: o.moisFilleul },
     },
   });
@@ -410,6 +414,14 @@ routeur.post('/abonnement/paiement', avecSession('gestion'), h(async (req, res) 
   res.json({ url: session.url });
 }));
 
+routeur.post('/abonnement/portail', avecSession('gestion'), h(async (req, res) => {
+  const c = await cabinetDe(req.s.cabinet_id);
+  if (!stripeActif() || !c.stripe_client) return erreur(res, 400, 'Aucun abonnement en ligne pour ce cabinet.');
+  const origine = process.env.URL_PUBLIQUE || `https://${req.get('host')}`;
+  const session = await stripe('POST', '/billing_portal/sessions', { customer: c.stripe_client, return_url: `${origine}/` });
+  res.json({ url: session.url });
+}));
+
 /** Événements Stripe (route montée hors du routeur, avec le corps brut pour vérifier la signature). */
 export const webhookStripe = h(async (req, res) => {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -499,6 +511,21 @@ routeur.post('/plateforme/cabinets/:id', avecSession('plateforme'), h(async (req
   res.json({ ok: true });
 }));
 
+routeur.get('/plateforme/cabinets/:id/comptes', avecSession('plateforme'), h(async (req, res) => {
+  const { rows } = await q('select id, prenom, nom, identifiant, role, gestionnaire, actif, totp_actif from utilisateurs where cabinet_id = $1 order by cree', [req.params.id]);
+  res.json({ comptes: rows.map((u) => ({ id: u.id, prenom: u.prenom, nom: u.nom, identifiant: u.identifiant, role: u.role, gestionnaire: u.gestionnaire, actif: u.actif, mfa: u.totp_actif })) });
+}));
+
+routeur.post('/plateforme/comptes/:id/reinitialiser', avecSession('plateforme'), h(async (req, res) => {
+  const u = (await q("select * from utilisateurs where id = $1 and role <> 'plateforme'", [req.params.id])).rows[0];
+  if (!u) return erreur(res, 404, 'Compte introuvable.');
+  const mdp = motDePasseProvisoire();
+  await q('update utilisateurs set hash = $2, doit_changer = true, totp_actif = false, totp_secret = null, totp_dernier = 0, echecs = 0, bloque_jusqu = null where id = $1', [u.id, await hacherMotDePasse(mdp)]);
+  await q('delete from sessions where utilisateur_id = $1', [u.id]);
+  await journaliser(req, 'utilisateur.motdepasse', { cabinetId: u.cabinet_id, cible: nomDe(u), detail: 'Accès réinitialisé par SACCADES : mot de passe provisoire et double authentification à réactiver' });
+  res.json({ motDePasse: mdp });
+}));
+
 routeur.put('/plateforme/offre', avecSession('plateforme'), h(async (req, res) => {
   const b = req.body;
   const nombre = (v, min, max, defaut) => (Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max ? Number(v) : defaut);
@@ -512,6 +539,8 @@ routeur.put('/plateforme/offre', avecSession('plateforme'), h(async (req, res) =
     contact: texte(b.contact, 200),
     editeur: texte(b.editeur, 600),
     hebergeur: texte(b.hebergeur, 600),
+    annonce: texte(b.annonce, 500).trim(),
+    annonceTon: b.annonceTon === 'warn' ? 'warn' : 'info',
   };
   if (o.inscriptionsOuvertes && !o.cgu.trim()) return erreur(res, 400, 'Rédigez les conditions générales avant d’ouvrir les inscriptions.');
   await q('insert into reglages (cabinet_id, cle, valeur) values ($1, $2, $3) on conflict (cabinet_id, cle) do update set valeur = excluded.valeur', [PLATEFORME, 'offre', JSON.stringify(o)]);
@@ -574,6 +603,7 @@ routeur.get('/etat', avecSession('complet'), h(async (req, res) => {
     compteurFacture: compteur ? Number(compteur.valeur) || 0 : 0,
     stats: admin || gere(s) ? await statistiques(s.cabinet_id) : undefined,
     abonnement: gere(s) ? await abonnementDuCabinet(s.cabinet_id) : { ...s.abonnement },
+    annonce: o.annonce ? { texte: o.annonce, ton: o.annonceTon } : null,
   });
 }));
 
@@ -762,6 +792,7 @@ routeur.put('/reglages', avecSession('gestion'), h(async (req, res) => {
 }));
 
 /* ---------- Erreurs ---------- */
+routeur.use((req, res) => erreur(res, 404, 'Adresse inconnue.'));
 // eslint-disable-next-line no-unused-vars
 routeur.use((err, req, res, next) => {
   console.error(`Erreur sur ${req.method} ${req.path} :`, err.message);

@@ -30,6 +30,8 @@ Comptes de la démonstration (mot de passe `demo`) : `proprietaire` (console de 
 npm install
 npm run construire        # produit les trois versions
 DATABASE_URL=postgres://… PROPRIETAIRE_MOT_DE_PASSE='au-moins-12-caracteres' npm start
+DATABASE_URL=postgres://…/base_de_test_vide npm test   # tests automatiques de l'API
+npm run reinitialiser-acces -- <identifiant>           # secours : mot de passe provisoire
 ```
 
 | Dossier ou fichier | Rôle |
@@ -42,6 +44,10 @@ DATABASE_URL=postgres://… PROPRIETAIRE_MOT_DE_PASSE='au-moins-12-caracteres' n
 | `server/stripe.js` | Paiement en ligne (facultatif) et vérification des notifications signées |
 | `src/offre.js` | Période gratuite, état de l'abonnement, mois offerts |
 | `server/schema.sql` | Schéma PostgreSQL (journal protégé contre la modification) |
+| `src/views/Accueil.jsx` | Page d'accueil publique (présentation, tarif, questions fréquentes) |
+| `src/views/Plateforme.jsx` | Console du propriétaire : cabinets, accès, offre, annonces |
+| `tests/lancer.mjs`, `.github/workflows/tests.yml` | Tests automatiques de l'API, exécutés par GitHub à chaque modification |
+| `server/outils/reinitialiser-acces.js` | Commande de secours en cas de perte d'accès |
 | `Procfile`, `.env.exemple` | Déploiement (Scalingo ou tout hébergeur Node.js certifié HDS) |
 
 ## Points à valider par le cabinet

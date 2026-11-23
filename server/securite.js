@@ -20,6 +20,14 @@ export async function verifierMotDePasse(mdp, stocke) {
 /** Empreinte de comparaison utilisée quand l'identifiant n'existe pas : la réponse prend le même temps. */
 export const LEURRE = await hacherMotDePasse(randomBytes(12).toString('hex'));
 
+/** Mot de passe provisoire lisible à dicter au téléphone : 4 groupes de 4 caractères sans ambiguïté. */
+export function motDePasseProvisoire() {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const octets = randomBytes(16);
+  const c = Array.from(octets, (o) => A[o % A.length]).join('');
+  return `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8, 12)}-${c.slice(12, 16)}`;
+}
+
 export const jeton = () => randomBytes(32).toString('base64url');
 export const empreinte = (texte) => createHash('sha256').update(String(texte)).digest('hex');
 

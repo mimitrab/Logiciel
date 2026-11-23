@@ -2,7 +2,7 @@
 // En production (mode serveur) : mot de passe, double authentification par application (TOTP),
 // changement du mot de passe provisoire. Objectif à terme : Pro Santé Connect (e-CPS, carte CPS).
 import React, { useEffect, useState } from 'react';
-import { Building2, Gift, KeyRound, Lock, LogIn, ShieldCheck, Smartphone, UserPlus, UserRound } from 'lucide-react';
+import { ArrowLeft, Building2, Gift, KeyRound, Lock, LogIn, ShieldCheck, Smartphone, UserPlus, UserRound } from 'lucide-react';
 import { Btn, Field, Logo, Text, cx } from '../ui.jsx';
 import { nomUtilisateur } from '../domain.js';
 import { MOT_DE_PASSE_DEMO } from '../seed.js';
@@ -14,13 +14,23 @@ import Inscription from './Inscription.jsx';
 const ESSAIS_MAX = 5;
 const BLOCAGE_S = 60;
 
-function Cadre({ infos = {}, children }) {
+function Cadre({ infos = {}, onAccueil, children }) {
   const o = infos.offre;
   const [mentions, setMentions] = useState(false);
   return (
-    <div className="h-full overflow-y-auto bg-bg">
-      <div className="gutter mx-auto flex min-h-full w-full max-w-[920px] flex-col justify-center gap-6 py-8 md:flex-row md:items-center md:gap-10">
+    <div className="flex h-full flex-col overflow-y-auto bg-bg">
+      {infos.annonce && (
+        <p className={cx('gutter border-b py-2 text-center text-[13px] text-ink', infos.annonce.ton === 'warn' ? 'border-warn bg-warn-soft' : 'border-info bg-info-soft')} role="status">
+          {infos.annonce.texte}
+        </p>
+      )}
+      <div className="gutter mx-auto flex w-full flex-1 max-w-[920px] flex-col justify-center gap-6 py-8 md:flex-row md:items-center md:gap-10">
         <div className="md:w-[44%]">
+          {onAccueil && (
+            <button type="button" onClick={onAccueil} className="mb-5 inline-flex items-center gap-1.5 rounded text-[13px] font-medium text-ink-2 hover:text-ink">
+              <ArrowLeft size={15} aria-hidden="true" /> Retour à l'accueil
+            </button>
+          )}
           <div className="flex items-center gap-3 text-accent">
             <Logo size={44} />
             <div className="leading-tight">
@@ -57,7 +67,7 @@ function Cadre({ infos = {}, children }) {
 }
 
 /* ---------- Démonstration : connexion locale ---------- */
-function ConnexionDemo({ utilisateurs, cabinet, plateforme, onLogin }) {
+function ConnexionDemo({ utilisateurs, cabinet, plateforme, onLogin, onAccueil }) {
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
   const [erreur, setErreur] = useState('');
@@ -87,7 +97,7 @@ function ConnexionDemo({ utilisateurs, cabinet, plateforme, onLogin }) {
   const demos = utilisateurs.filter((u) => u.demo && u.actif);
 
   return (
-    <Cadre infos={{ ...cabinet, offre: plateforme && plateforme.offre }}>
+    <Cadre infos={{ ...cabinet, offre: plateforme && plateforme.offre, annonce: plateforme && plateforme.offre && plateforme.offre.annonce ? { texte: plateforme.offre.annonce, ton: plateforme.offre.annonceTon } : null }} onAccueil={onAccueil}>
       <h2 className="text-[17px] font-semibold text-ink">Connexion</h2>
       <p className="mt-0.5 text-[12.5px] text-ink-3">{cabinet.nom}</p>
       <form className="mt-4 grid gap-3" onSubmit={(e) => { e.preventDefault(); tenter(identifiant, motDePasse); }}>
@@ -133,12 +143,12 @@ function ConnexionDemo({ utilisateurs, cabinet, plateforme, onLogin }) {
 }
 
 /* ---------- Production : connexion par le serveur ---------- */
-function ConnexionServeur({ etapeInitiale, onConnecte }) {
+function ConnexionServeur({ etapeInitiale, onConnecte, ecranInitial, onAccueil }) {
   const [etape, setEtape] = useState(etapeInitiale || 'identifiants');
   const [infos, setInfos] = useState({});
   // Le code de parrainage du lien est lu une fois, puis retiré de l'adresse.
   const [parrain] = useState(() => new URLSearchParams(window.location.search).get('parrain') || '');
-  const [ecran, setEcran] = useState(parrain ? 'inscription' : 'connexion');
+  const [ecran, setEcran] = useState(parrain || ecranInitial === 'inscription' ? 'inscription' : 'connexion');
   useEffect(() => {
     if (parrain) window.history.replaceState(null, '', window.location.pathname);
   }, []);
@@ -246,7 +256,7 @@ function ConnexionServeur({ etapeInitiale, onConnecte }) {
   const titres = { identifiants: 'Connexion', mfa: 'Double authentification', 'mfa-activation': 'Activer la double authentification', changer: 'Nouveau mot de passe' };
   if (ecran === 'inscription' && etape === 'identifiants') {
     return (
-      <Cadre infos={infos}>
+      <Cadre infos={infos} onAccueil={onAccueil}>
         {infos.inscriptions ? (
           <Inscription infos={infos} codeInitial={parrain.toUpperCase()} onRetour={() => setEcran('connexion')} />
         ) : (
@@ -260,7 +270,7 @@ function ConnexionServeur({ etapeInitiale, onConnecte }) {
     );
   }
   return (
-    <Cadre infos={infos}>
+    <Cadre infos={infos} onAccueil={onAccueil}>
       <h2 className="text-[17px] font-semibold text-ink">{titres[etape]}</h2>
       {contenu}
       {erreur && (
@@ -284,5 +294,5 @@ function ConnexionServeur({ etapeInitiale, onConnecte }) {
 }
 
 export default function Login(props) {
-  return SERVEUR ? <ConnexionServeur etapeInitiale={props.etapeInitiale} onConnecte={props.onConnecte} /> : <ConnexionDemo {...props} />;
+  return SERVEUR ? <ConnexionServeur etapeInitiale={props.etapeInitiale} onConnecte={props.onConnecte} ecranInitial={props.ecranInitial} onAccueil={props.onAccueil} /> : <ConnexionDemo {...props} />;
 }

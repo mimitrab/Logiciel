@@ -5,7 +5,7 @@ process.env.TZ = process.env.TZ || 'Europe/Paris';
 const { default: express } = await import('express');
 const path = await import('node:path');
 const { fileURLToPath } = await import('node:url');
-const { initialiser } = await import('./db.js');
+const { initialiser, pool } = await import('./db.js');
 const { routeur, webhookStripe } = await import('./api.js');
 
 const ici = path.dirname(fileURLToPath(import.meta.url));
@@ -46,6 +46,7 @@ app.use((req, res, next) => {
 // Stripe signe le corps brut de ses notifications : cette route le reçoit tel quel.
 app.post('/api/stripe/webhook', express.raw({ type: '*/*', limit: '1mb' }), webhookStripe);
 app.use('/api', express.json({ limit: '4mb' }), routeur);
+app.get('/robots.txt', (req, res) => res.type('text/plain').send('User-agent: *\nDisallow: /api/\n'));
 app.use(express.static(path.join(ici, 'public'), { index: false, maxAge: PROD ? '1h' : 0 }));
 app.get('*', (req, res) => {
   res.set('Cache-Control', 'no-cache');
@@ -54,4 +55,12 @@ app.get('*', (req, res) => {
 
 await initialiser();
 const port = Number(process.env.PORT) || 3000;
-app.listen(port, () => console.log(`SACCADES écoute sur le port ${port}${PROD ? '' : ' (développement)'}.`));
+const serveur = app.listen(port, () => console.log(`SACCADES écoute sur le port ${port}${PROD ? '' : ' (développement)'}.`));
+
+// Arrêt propre lors d'un redéploiement : les requêtes en cours se terminent avant la fermeture.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    serveur.close(() => pool.end().finally(() => process.exit(0)));
+    setTimeout(() => process.exit(0), 10000).unref();
+  });
+}

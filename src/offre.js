@@ -11,6 +11,8 @@ export const OFFRE_DEFAUT = {
   contact: '',
   editeur: '',
   hebergeur: '',
+  annonce: '',
+  annonceTon: 'info',
 };
 
 /** Ajoute n mois à une date ISO (le 31 janvier + 1 mois donne le 28 ou 29 février). */

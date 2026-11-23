@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node server/index.js",
-    "construire": "node build.mjs"
+    "construire": "node build.mjs",
+    "test": "node tests/lancer.mjs",
+    "reinitialiser-acces": "node server/outils/reinitialiser-acces.js"
   },
   "devDependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.1",

@@ -86,7 +86,10 @@ cliquez sur *Valider* : la période gratuite commence à ce moment-là.
    aux événements `checkout.session.completed`, `customer.subscription.created`,
    `customer.subscription.updated`, `customer.subscription.deleted` et `invoice.paid`. Copiez son secret
    de signature dans `STRIPE_WEBHOOK_SECRET`.
-5. Faites un essai complet en **mode test** de Stripe (clés `sk_test_…`) avant de passer aux clés
+5. Activez le **portail client** de Stripe (*Paramètres → Facturation → Portail client*) : il permet à
+   chaque cabinet abonné de changer sa carte, télécharger ses factures et résilier depuis le bouton
+   *Gérer mon abonnement* de SACCADES.
+6. Faites un essai complet en **mode test** de Stripe (clés `sk_test_…`) avant de passer aux clés
    réelles.
 
 Un cabinet en période gratuite qui s'abonne n'est prélevé qu'à la fin de sa période gratuite. Le
@@ -109,6 +112,66 @@ Un cabinet qui ne s'abonne pas passe en **lecture seule** : ses dossiers restent
 exportables, mais la saisie est bloquée jusqu'à l'abonnement. Les données d'un patient ne sont jamais
 rendues inaccessibles à son praticien.
 
+### Votre console de propriétaire au quotidien
+
+Vous vous connectez sur le site comme tout le monde (identifiant `proprietaire`). Vous ne voyez jamais
+de dossier de patient. Ce que vous pouvez faire sans développeur :
+
+| Besoin | Où |
+| --- | --- |
+| Valider ou refuser une inscription | *Cabinets inscrits* → *Valider* / *Refuser* |
+| Offrir un mois, enregistrer un virement | *Cabinets inscrits* → *+1 mois* / *Paiement reçu* |
+| Suspendre un cabinet (impayé, fin de contrat) | *Cabinets inscrits* → *Suspendre* : ses sessions sont fermées |
+| Débloquer un praticien qui a perdu son téléphone ou son mot de passe | *Cabinets inscrits* → *Accès* → *Réinitialiser l'accès* |
+| Changer le prix, la période gratuite, le parrainage | *Offre et inscriptions* |
+| Mettre à jour CGU, mentions légales, adresse de contact | *Offre et inscriptions* |
+| Prévenir tous les utilisateurs (maintenance, nouveauté) | *Offre et inscriptions* → *Annonce à tous les cabinets* |
+
+**Réinitialiser un accès.** Rappelez d'abord le praticien au numéro du cabinet pour vérifier son
+identité. Le mot de passe provisoire s'affiche une seule fois : dictez-le par téléphone, jamais par
+courriel ni SMS. Ses sessions ouvertes sont fermées ; à la connexion suivante, il réactive la double
+authentification et choisit un nouveau mot de passe. L'opération est inscrite au journal.
+
+### Si vous perdez votre propre accès
+
+Votre compte ne peut pas être réinitialisé depuis le site. Depuis l'ordinateur où la commande
+`scalingo` est installée (ou depuis le *Terminal* du tableau de bord Scalingo) :
+
+```sh
+scalingo --app <nom-de-votre-application> run npm run reinitialiser-acces -- proprietaire
+```
+
+La commande affiche un mot de passe provisoire, efface la double authentification et ferme les sessions.
+Connectez-vous, réactivez la double authentification et choisissez un nouveau mot de passe. La même
+commande fonctionne pour n'importe quel identifiant, en dernier recours.
+
+### Modifier le site après la mise en ligne
+
+Les réglages (prix, textes, annonces, comptes) se changent dans la console, sans toucher au code.
+Une modification du **code** (nouvel écran, nouveau calcul) passe par un développeur :
+
+1. il modifie le code dans le dépôt GitHub, puis lance `npm run construire` et `npm test` ;
+2. GitHub relance les tests automatiques à chaque envoi (onglet *Actions*) ;
+3. une fois la modification fusionnée dans la branche suivie par Scalingo, Scalingo redéploie le site
+   sans interruption : les requêtes en cours se terminent avant le redémarrage.
+
+**Revenir en arrière** : dans Scalingo, onglet *Deployments*, redéployez la version précédente. Les
+données ne sont pas touchées par un redéploiement.
+
+### Tests automatiques
+
+`npm test` vérifie sur une base PostgreSQL **vide et dédiée** : double authentification, cloisonnement
+des cabinets, propriétaire sans accès aux dossiers, inscriptions, période gratuite, lecture seule,
+paiement, parrainage (une seule récompense), signature des notifications Stripe, réinitialisation
+d'accès, journal inaltérable, blocage après 5 échecs.
+
+```sh
+DATABASE_URL=postgres://localhost/saccades_tests npm test
+```
+
+Le script refuse de s'exécuter sur une base qui contient déjà des comptes : ne le lancez jamais sur la
+production. Sur GitHub, le fichier `.github/workflows/tests.yml` les exécute à chaque modification.
+
 ### Ce que fait déjà le serveur
 
 - **Cloisonnement** : chaque cabinet est isolé des autres, et chaque praticien n'accède qu'à ses
@@ -125,6 +188,8 @@ rendues inaccessibles à son praticien.
 - **Paiement en ligne** : les notifications de Stripe sont vérifiées par leur signature.
 - **Sécurité du site** : HTTPS imposé, politique de sécurité du contenu stricte, aucun script ni
   aucune police chargés depuis un site tiers.
+- **Entretien** : les sessions expirées sont effacées toutes les heures ; arrêt propre lors des
+  redéploiements.
 
 ---
 

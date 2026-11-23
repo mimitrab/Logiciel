@@ -1,11 +1,14 @@
 // Console du propriétaire de SACCADES : inscriptions, abonnements, parrainages, offre.
 // Aucun dossier de patient n'est accessible ici.
-import React, { useState } from 'react';
-import { Building2, Check, CreditCard, ExternalLink, Gift, Save, ScrollText, ShieldAlert, UserCheck } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Building2, Check, Copy, CreditCard, ExternalLink, Gift, KeyRound, Megaphone, Save, ScrollText, ShieldAlert, UserCheck } from 'lucide-react';
 import { Area, Btn, Card, CardHead, Chip, ConfirmBtn, Empty, Field, Modal, Notice, Num, Pill, Segmented, Text, cx, useApp } from '../ui.jsx';
 import { ACTIONS_JOURNAL } from '../domain.js';
 import { ajouterMois, etatAbonnement } from '../offre.js';
 import { dateCourte, euro, horodatage, todayISO } from '../lib.js';
+import { SERVEUR } from '../mode.js';
+import { api } from '../api.js';
+import { copierTexte } from './commun.jsx';
 
 const ACTIONS_PLATEFORME = Object.keys(ACTIONS_JOURNAL).filter((a) => /^(cabinet|abonnement|parrainage|offre)\./.test(a));
 const jour = (ts) => (ts ? dateCourte(new Date(ts).toISOString().slice(0, 10)) : '—');
@@ -51,11 +54,70 @@ function Paiement({ cabinet, onClose }) {
   );
 }
 
+/** Comptes d'un cabinet : réinitialiser l'accès d'un praticien bloqué. */
+function AccesComptes({ cabinet, onClose }) {
+  const { global, actions, toast } = useApp();
+  const [comptes, setComptes] = useState(null);
+  const [resultat, setResultat] = useState(null);
+  useEffect(() => {
+    if (SERVEUR) {
+      api.get(`/plateforme/cabinets/${cabinet.id}/comptes`).then((r) => setComptes(r.comptes)).catch((e) => setComptes([]) || toast(e.message, 'danger'));
+    } else if (cabinet.id === 'c_demo') {
+      setComptes(global.utilisateurs.filter((u) => u.role !== 'plateforme').map((u) => ({ ...u, mfa: true })));
+    } else {
+      setComptes(cabinet.fondateur ? [{ id: `${cabinet.id}-fondateur`, prenom: '', nom: cabinet.fondateur.nom, identifiant: '(démonstration)', role: 'praticien', gestionnaire: true, actif: true, mfa: true }] : []);
+    }
+  }, []);
+  const reinitialiser = async (u) => {
+    const mdp = await actions.reinitialiserAcces(u.id);
+    if (mdp) setResultat({ nom: [u.prenom, u.nom].filter(Boolean).join(' '), identifiant: u.identifiant, mdp });
+  };
+  return (
+    <Modal title="Accès des comptes" subtitle={`${cabinet.nom} (${cabinet.ville})`} onClose={onClose}>
+      <Notice tone="warn" icon={ShieldAlert} className="mb-4">
+        Avant toute réinitialisation, vérifiez l'identité de la personne en la rappelant au numéro du cabinet. Le mot de passe provisoire se dicte par téléphone, jamais par e-mail ni par SMS.
+      </Notice>
+      {resultat && (
+        <div className="mb-4 rounded-lg border border-ok bg-ok-soft px-4 py-3">
+          <p className="text-[13px] text-ink">
+            Accès de <span className="font-semibold">{resultat.nom}</span> réinitialisé. Identifiant : <span className="font-mono">{resultat.identifiant}</span>
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="rounded-md bg-surface px-3 py-1.5 font-mono text-[18px] tracking-[0.06em] text-ink">{resultat.mdp}</code>
+            <Btn size="sm" icon={Copy} onClick={async () => toast((await copierTexte(resultat.mdp)) ? 'Copié' : 'Copie refusée')}>Copier</Btn>
+          </div>
+          <p className="mt-2 text-[12px] text-ink-2">Ce mot de passe ne sera plus affiché. À la connexion, la personne choisit un nouveau mot de passe et réactive sa double authentification.{SERVEUR ? '' : ' Démonstration : aucun mot de passe n’est réellement modifié.'}</p>
+        </div>
+      )}
+      {!comptes ? (
+        <p className="text-[13px] text-ink-3">Chargement des comptes…</p>
+      ) : (
+        <ul className="divide-y divide-line rounded-lg border border-line">
+          {comptes.map((u) => (
+            <li key={u.id} className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5">
+              <span className="min-w-0">
+                <span className="block text-[13.5px] font-medium text-ink">{[u.prenom, u.nom].filter(Boolean).join(' ')}</span>
+                <span className="block text-[12px] text-ink-3">
+                  <span className="font-mono">{u.identifiant}</span> · {u.role === 'admin' ? 'Administrateur' : u.gestionnaire ? 'Praticien, gestionnaire' : 'Praticien'}
+                  {u.actif ? '' : ' · désactivé'}
+                  {u.mfa ? '' : ' · double authentification à activer'}
+                </span>
+              </span>
+              <ConfirmBtn label="Réinitialiser l'accès" confirmLabel="Confirmer la réinitialisation" icon={KeyRound} onConfirm={() => reinitialiser(u)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
+  );
+}
+
 export function Cabinets() {
   const { global, actions } = useApp();
   const d = global.plateforme;
   const [filtre, setFiltre] = useState('tous');
   const [paiement, setPaiement] = useState(null);
+  const [acces, setAcces] = useState(null);
   if (!d) return <Card><Empty icon={Building2} title="Console indisponible" /></Card>;
   const nomDe = (id) => (d.cabinets.find((c) => c.id === id) || {}).nom;
   const liste = d.cabinets.map((c) => ({ ...c, etat: etatAbonnement(c), filleuls: d.parrainages.filter((p) => p.parrainId === c.id) }));
@@ -147,10 +209,16 @@ export function Cabinets() {
                         <span className="flex flex-wrap justify-end gap-1.5">
                           <Btn size="sm" icon={CreditCard} onClick={() => setPaiement(c)}>Paiement reçu</Btn>
                           <Btn size="sm" variant="ghost" icon={Gift} onClick={() => actions.plateforme('prolonger', c.id, { mois: 1 })}>+1 mois</Btn>
+                          <Btn size="sm" variant="ghost" icon={KeyRound} onClick={() => setAcces(c)}>Accès</Btn>
                           <ConfirmBtn label="Suspendre" confirmLabel="Confirmer" icon={ShieldAlert} onConfirm={() => actions.plateforme('suspendre', c.id)} />
                         </span>
                       )}
-                      {c.statut === 'suspendu' && <Btn size="sm" onClick={() => actions.plateforme('reactiver', c.id)}>Réactiver</Btn>}
+                      {c.statut === 'suspendu' && (
+                        <span className="flex justify-end gap-1.5">
+                          <Btn size="sm" variant="ghost" icon={KeyRound} onClick={() => setAcces(c)}>Accès</Btn>
+                          <Btn size="sm" onClick={() => actions.plateforme('reactiver', c.id)}>Réactiver</Btn>
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -179,6 +247,7 @@ export function Cabinets() {
         )}
       </Card>
       {paiement && <Paiement cabinet={paiement} onClose={() => setPaiement(null)} />}
+      {acces && <AccesComptes cabinet={acces} onClose={() => setAcces(null)} />}
     </div>
   );
 }
@@ -231,6 +300,21 @@ export function Offre() {
           </div>
         </Card>
       </div>
+
+      <Card>
+        <CardHead icon={Megaphone} title="Annonce à tous les cabinets" hint="maintenance, nouveauté, information importante" />
+        <div className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <Field label="Message (laisser vide pour ne rien afficher)" htmlFor="of-annonce" hint={`${(o.annonce || '').length}/500 caractères. Affiché en haut de l'écran de tous les utilisateurs et sur la page d'accueil.`}>
+            <Area id="of-annonce" rows={2} maxLength={500} value={o.annonce || ''} onChange={set('annonce')} placeholder="Maintenance prévue dimanche 7 décembre de 7 h à 8 h : SACCADES sera indisponible." />
+          </Field>
+          <Field label="Ton">
+            <Segmented id="of-annonce-ton" label="Ton de l'annonce" allowEmpty={false} value={o.annonceTon || 'info'} onChange={set('annonceTon')} options={[['info', 'Information'], ['warn', 'Important']]} />
+          </Field>
+          {(o.annonce || '').trim() && (
+            <p className={cx('rounded-md border px-3 py-2 text-center text-[13px] text-ink lg:col-span-2', o.annonceTon === 'warn' ? 'border-warn bg-warn-soft' : 'border-info bg-info-soft')}>{o.annonce}</p>
+          )}
+        </div>
+      </Card>
 
       <Card>
         <CardHead icon={ScrollText} title="Documents légaux" />

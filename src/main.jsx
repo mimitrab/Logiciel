@@ -12,6 +12,7 @@ import { COLLECTIONS, api, differences } from './api.js';
 import { MODE, SERVEUR } from './mode.js';
 import { dateCourte, horodatage, nomComplet, todayISO, uid } from './lib.js';
 import Login from './views/Login.jsx';
+import Accueil from './views/Accueil.jsx';
 import Mentions from './views/Mentions.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Agenda from './views/Agenda.jsx';
@@ -99,6 +100,9 @@ function App() {
   const [route, setRoute] = useState({ vue: null });
   const [toasts, setToasts] = useState([]);
   const [modal, setModal] = useState(null);
+  // Visiteur non connecté : page d'accueil, connexion ou inscription.
+  const [ecranPublic, setEcranPublic] = useState(() => (new URLSearchParams(window.location.search).get('parrain') ? 'connexion' : 'accueil'));
+  const [infosPubliques, setInfosPubliques] = useState({});
 
   const toast = useCallback((message, tone) => {
     const id = uid('t');
@@ -196,6 +200,10 @@ function App() {
   }, [state]);
 
   const user = sess && state ? state.utilisateurs.find((u) => u.id === sess.userId && u.actif !== false) : null;
+  // Offre et annonce publiques : relues à chaque retour sur les écrans publics (après une déconnexion).
+  useEffect(() => {
+    if (SERVEUR && !user) api.get('/public').then((r) => setInfosPubliques(r.plateforme || {})).catch(() => {});
+  }, [!!user]);
   const estAdmin = !!user && user.role === 'admin';
   const acces = estAdmin && sess.acces ? sess.acces : null;
   const portee = user ? (estAdmin ? (acces ? acces.praticienId : null) : user.id) : null;
@@ -204,6 +212,8 @@ function App() {
   const gestion = !!user && (user.role === 'admin' || !!user.gestionnaire);
   const abonnement = state && !estPlateforme ? (SERVEUR ? state.abonnement : abonnementDemo(state)) : null;
   lectureRef.current = !!(abonnement && abonnement.lectureSeule);
+  const offreLocale = !SERVEUR && state && state.plateforme && state.plateforme.offre;
+  const annonce = SERVEUR ? state && state.annonce : offreLocale && offreLocale.annonce ? { texte: offreLocale.annonce, ton: offreLocale.annonceTon } : null;
 
   const actions = useMemo(() => {
     // En lecture seule (période gratuite terminée), les modifications de dossiers sont refusées.
@@ -270,6 +280,7 @@ function App() {
       async deconnexion(auto) {
         const s = sessRef.current;
         if (!s) return;
+        setEcranPublic('connexion');
         if (SERVEUR) {
           await synchroniser();
           try {
@@ -479,6 +490,33 @@ function App() {
         setModal(null);
       },
       recharger: () => chargerEtat(),
+      async reinitialiserAcces(userId) {
+        if (SERVEUR) {
+          try {
+            return (await api.post(`/plateforme/comptes/${userId}/reinitialiser`)).motDePasse;
+          } catch (e) {
+            toast(e.message, 'danger');
+            return null;
+          }
+        }
+        const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        const t = new Uint8Array(16);
+        window.crypto.getRandomValues(t);
+        const c = Array.from(t, (o) => A[o % A.length]).join('');
+        run((st) => trace(st, 'utilisateur.motdepasse', { detail: 'Démonstration : réinitialisation simulée' }));
+        return `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8, 12)}-${c.slice(12, 16)}`;
+      },
+      async portailAbonnement() {
+        if (!SERVEUR) {
+          toast("Démonstration : le portail de paiement n'est pas activé.");
+          return;
+        }
+        try {
+          window.location.assign((await api.post('/abonnement/portail')).url);
+        } catch (e) {
+          toast(e.message, 'danger');
+        }
+      },
 
       /* ----- Plateforme, abonnement ----- */
       async plateforme(action, cabinetId, params = {}) {
@@ -521,6 +559,18 @@ function App() {
         if (cible && !(recent && Date.now() - recent.ts < 5 * 60000)) run((st) => trace(st, action, { cible }));
       },
     };
+    // En lecture seule, toute action qui modifierait un dossier est arrêtée avant d'annoncer un succès.
+    const MUTANTES = ['enregistrerPatient', 'majRgpd', 'enregistrerRdv', 'supprimerRdv', 'statutRdv', 'validerSeance', 'nouveauBilan', 'modifierBilan', 'genererCR', 'editerCR', 'statutBilan', 'enregistrerEnvoi', 'supprimerBilan', 'facturerBilan', 'ajouterFacture', 'modifierFacture'];
+    for (const k of MUTANTES) {
+      const f = api_[k];
+      api_[k] = (...args) => {
+        if (lectureRef.current) {
+          toast('Lecture seule : la période gratuite est terminée. Vos dossiers restent consultables et exportables.', 'danger');
+          return null;
+        }
+        return f(...args);
+      };
+    }
     return api_;
   }, []);
 
@@ -546,11 +596,21 @@ function App() {
   const vueDonnees = useMemo(() => (!state ? null : { ...(portee ? vuePraticien(state, portee) : { ...state, patients: [], rdvs: [], bilans: [], factures: [] }), abonnement }), [state, portee, abonnement]);
   const ctx = useMemo(() => ({ state: vueDonnees, global: state, user, praticien, estAdmin, acces, portee, actions, go: actions.go, toast, route }), [vueDonnees, state, user, praticien, acces, route]);
 
+  // Titre de l'onglet : la page ouverte (la vue par défaut dépend du rôle).
+  const vueTitre = user ? route.vue || (estPlateforme ? 'cabinets' : estAdmin ? 'supervision' : 'accueil') : null;
+  useEffect(() => {
+    document.title = vueTitre && MODULES[vueTitre] ? `${MODULES[vueTitre].label} · SACCADES` : 'SACCADES';
+  }, [vueTitre]);
+
   if (!user) {
     if (SERVEUR && etapeLogin === 'chargement') return <p className="boot">Connexion au serveur…</p>;
+    const offreDemo = state && state.plateforme && state.plateforme.offre;
+    const infos = SERVEUR ? infosPubliques : { ...(state ? state.cabinet : {}), offre: offreDemo, annonce: offreDemo && offreDemo.annonce ? { texte: offreDemo.annonce, ton: offreDemo.annonceTon } : null };
+    if (ecranPublic === 'accueil' && (!SERVEUR || etapeLogin === 'identifiants'))
+      return <Accueil infos={infos} onConnexion={() => setEcranPublic('connexion')} onEssai={() => setEcranPublic(SERVEUR ? 'inscription' : 'connexion')} />;
     return (
       <>
-        <Login utilisateurs={state ? state.utilisateurs : []} cabinet={state ? state.cabinet : {}} plateforme={state ? state.plateforme : null} onLogin={actions.connexion} etapeInitiale={etapeLogin} onConnecte={actions.connecte} />
+        <Login key={ecranPublic} utilisateurs={state ? state.utilisateurs : []} cabinet={state ? state.cabinet : {}} plateforme={state ? state.plateforme : null} onLogin={actions.connexion} etapeInitiale={etapeLogin} onConnecte={actions.connecte} ecranInitial={ecranPublic} onAccueil={() => setEcranPublic('accueil')} />
         <Toasts items={toasts} />
       </>
     );
@@ -647,6 +707,9 @@ function App() {
             <p className="gutter border-b border-warn bg-warn-soft py-1.5 text-center text-[12px] text-ink">
               Démonstration : tous les patients sont fictifs. N'y saisissez aucune donnée réelle.
             </p>
+          )}
+          {annonce && !estPlateforme && (
+            <p className={cx('gutter border-b py-2 text-center text-[13px] text-ink', annonce.ton === 'warn' ? 'border-warn bg-warn-soft' : 'border-info bg-info-soft')} role="status">{annonce.texte}</p>
           )}
           <div className="gutter mx-auto w-full max-w-[1360px] py-5 lg:py-7">
             {abonnement && abonnement.lectureSeule && (
