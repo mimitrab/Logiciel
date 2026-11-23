@@ -25,39 +25,40 @@ const utilisateursDemo = () => [
 const oeil = (sph = '', cyl = '', axe = '', add = '') => ({ sph, cyl, axe, add });
 const sans = () => ({ type: 'aucune', od: oeil(), og: oeil() });
 const lunettes = (od, og) => ({ type: 'lunettes', od, og });
-const marchand = { nom: 'Hélène Marchand', specialite: 'Ophtalmologiste', ville: 'Lyon 6e' };
-const girard = { nom: 'Paul Girard', specialite: 'Médecin généraliste', ville: 'Bron' };
+const marchand = { nom: 'Hélène Marchand', specialite: 'Ophtalmologiste', ville: 'Lyon 6e', mssante: 'helene.marchand@medecin.mssante.example' };
+const girard = { nom: 'Paul Girard', specialite: 'Médecin généraliste', ville: 'Bron', mssante: 'paul.girard@medecin.mssante.example' };
 
 function patientsDemo(j) {
   const rgpd = (jours, extra = {}) => ({ information: j(jours), transmission: 'ok', rappels: true, recherche: false, representant: '', maj: j(jours), ...extra });
   const C = 'u_camille';
   const J = 'u_julien';
+  const P = (p) => ({ ins: { qualifiee: !['p_noe', 'p_paul'].includes(p.id) }, ...p });
   return [
     { id: 'p_lea', praticienId: C, nom: 'Martin', prenom: 'Léa', sexe: 'F', ddn: '1998-03-12', tel: '06 12 00 00 01', email: 'lea.martin@courriel.example', nir: '2 98 03 69 000 001 42', mutuelle: 'Harmonie Mutuelle', exoneration: 'aucune', prescripteur: marchand,
       antecedentsOph: 'Myopie légère corrigée depuis 2019', antecedentsGen: 'Migraines occasionnelles', correction: lunettes(oeil('-0.75'), oeil('-0.50')),
       ordonnance: { date: j(-34), prescrites: 12, effectuees: 4, acte: '5.4', derniere: j(0) }, rgpd: rgpd(-36) },
-    { id: 'p_hugo', praticienId: C, nom: 'Petit', prenom: 'Hugo', sexe: 'M', ddn: '2018-06-21', tel: '06 12 00 00 02', email: '', nir: '1 18 06 69 000 002 17', mutuelle: 'MGEN', exoneration: 'aucune', prescripteur: { nom: 'Antoine Lefèvre', specialite: 'Pédiatre', ville: 'Villeurbanne' },
+    { id: 'p_hugo', praticienId: C, nom: 'Petit', prenom: 'Hugo', sexe: 'M', ddn: '2018-06-21', tel: '06 12 00 00 02', email: '', nir: '1 18 06 69 000 002 17', mutuelle: 'MGEN', exoneration: 'aucune', prescripteur: { nom: 'Antoine Lefèvre', specialite: 'Pédiatre', ville: 'Villeurbanne', mssante: 'antoine.lefevre@medecin.mssante.example' },
       antecedentsOph: '', antecedentsGen: 'Suivi orthophonique en cours pour un retard de lecture', correction: sans(), ordonnance: null, rgpd: rgpd(0, { representant: 'Mme Claire Petit, mère' }) },
     { id: 'p_jeanne', praticienId: C, nom: 'Dubois', prenom: 'Jeanne', sexe: 'F', ddn: '1947-11-02', tel: '04 78 00 00 03', email: '', nir: '2 47 11 69 000 003 08', mutuelle: 'AG2R La Mondiale', exoneration: 'ald', prescripteur: marchand,
       antecedentsOph: 'DMLA atrophique bilatérale, pseudophakie bilatérale (2016)', antecedentsGen: 'Hypertension artérielle traitée', correction: lunettes(oeil('2.00', '', '', '3.50'), oeil('2.25', '', '', '3.50')), ordonnance: null, rgpd: rgpd(0, { rappels: false }) },
-    { id: 'p_noe', praticienId: C, nom: 'Bernard', prenom: 'Noé', sexe: 'M', ddn: j(-282), tel: '06 12 00 00 04', email: '', nir: '1 26 02 69 000 004 63', mutuelle: 'Alan', exoneration: 'aucune', prescripteur: { nom: 'Sophie Nguyen', specialite: 'Pédiatre', ville: 'Lyon 3e' },
+    { id: 'p_noe', praticienId: C, nom: 'Bernard', prenom: 'Noé', sexe: 'M', ddn: j(-282), tel: '06 12 00 00 04', email: '', nir: '1 26 02 69 000 004 63', mutuelle: 'Alan', exoneration: 'aucune', prescripteur: { nom: 'Sophie Nguyen', specialite: 'Pédiatre', ville: 'Lyon 3e', mssante: 'sophie.nguyen@medecin.mssante.example' },
       antecedentsOph: 'Strabisme convergent chez le père', antecedentsGen: 'Naissance à terme, sans particularité', correction: sans(), ordonnance: null, rgpd: { information: '', transmission: '', rappels: false, recherche: false, representant: '', maj: '' } },
     { id: 'p_karim', praticienId: C, nom: 'Benali', prenom: 'Karim', sexe: 'M', ddn: '1984-09-17', tel: '06 12 00 00 05', email: 'k.benali@courriel.example', nir: '1 84 09 69 000 005 31', mutuelle: 'Malakoff Humanis', exoneration: 'aucune', prescripteur: marchand,
       antecedentsOph: 'Hypermétropie faible', antecedentsGen: '', correction: lunettes(oeil('0.50', '-0.50', '90'), oeil('0.75')),
       ordonnance: { date: j(-90), prescrites: 15, effectuees: 13, acte: '5.4', derniere: j(-7) }, rgpd: rgpd(-95) },
     { id: 'p_chloe', praticienId: C, nom: 'Roux', prenom: 'Chloé', sexe: 'F', ddn: '2011-04-09', tel: '06 12 00 00 06', email: '', nir: '2 11 04 69 000 006 74', mutuelle: 'Mutuelle Générale', exoneration: 'aucune', prescripteur: girard,
       antecedentsOph: '', antecedentsGen: '', correction: sans(), ordonnance: { date: j(-5), prescrites: 10, effectuees: 0, acte: '5.4', derniere: '' }, rgpd: rgpd(-6, { representant: 'M. David Roux, père' }) },
-    { id: 'p_marcel', praticienId: C, nom: 'Fontaine', prenom: 'Marcel', sexe: 'M', ddn: '1958-01-25', tel: '04 78 00 00 07', email: '', nir: '1 58 01 69 000 007 25', mutuelle: 'Groupama', exoneration: 'ald', prescripteur: { nom: 'Claire Morel', specialite: 'Neurologue', ville: 'Lyon 8e' },
+    { id: 'p_marcel', praticienId: C, nom: 'Fontaine', prenom: 'Marcel', sexe: 'M', ddn: '1958-01-25', tel: '04 78 00 00 07', email: '', nir: '1 58 01 69 000 007 25', mutuelle: 'Groupama', exoneration: 'ald', prescripteur: { nom: 'Claire Morel', specialite: 'Neurologue', ville: 'Lyon 8e', mssante: 'claire.morel@medecin.mssante.example' },
       antecedentsOph: 'Presbytie', antecedentsGen: 'AVC ischémique du tronc cérébral il y a trois mois, diabète de type 2', correction: lunettes(oeil('1.25', '', '', '2.50'), oeil('1.00', '', '', '2.50')), ordonnance: null, rgpd: rgpd(-62) },
     { id: 'p_ines', praticienId: C, nom: 'Caron', prenom: 'Inès', sexe: 'F', ddn: '2020-08-30', tel: '06 12 00 00 08', email: '', nir: '2 20 08 69 000 008 56', mutuelle: 'MAAF Santé', exoneration: 'aucune', prescripteur: marchand,
       antecedentsOph: 'Anisométropie hypermétropique', antecedentsGen: '', correction: lunettes(oeil('1.50'), oeil('4.00', '-1.00', '10')),
       ordonnance: { date: j(-110), prescrites: 20, effectuees: 7, acte: '5.8', derniere: j(-7) }, rgpd: rgpd(-118, { representant: 'Mme Sonia Caron, mère' }) },
 
-    { id: 'p_jules', praticienId: J, nom: 'Moreau', prenom: 'Jules', sexe: 'M', ddn: '2019-05-18', tel: '06 12 00 00 10', email: '', nir: '1 19 05 69 000 010 44', mutuelle: 'MGEN', exoneration: 'aucune', prescripteur: { nom: 'Sophie Nguyen', specialite: 'Pédiatre', ville: 'Lyon 3e' },
+    { id: 'p_jules', praticienId: J, nom: 'Moreau', prenom: 'Jules', sexe: 'M', ddn: '2019-05-18', tel: '06 12 00 00 10', email: '', nir: '1 19 05 69 000 010 44', mutuelle: 'MGEN', exoneration: 'aucune', prescripteur: { nom: 'Sophie Nguyen', specialite: 'Pédiatre', ville: 'Lyon 3e', mssante: 'sophie.nguyen@medecin.mssante.example' },
       antecedentsOph: '', antecedentsGen: '', correction: sans(), ordonnance: null, rgpd: rgpd(-10, { representant: 'Mme Anne Moreau, mère' }) },
     { id: 'p_thomas', praticienId: J, nom: 'Leroy', prenom: 'Thomas', sexe: 'M', ddn: '1991-12-05', tel: '06 12 00 00 09', email: 't.leroy@courriel.example', nir: '1 91 12 69 000 009 90', mutuelle: '', exoneration: 'aucune', prescripteur: girard,
       antecedentsOph: '', antecedentsGen: '', correction: sans(), ordonnance: null, rgpd: rgpd(-30) },
-    { id: 'p_robert', praticienId: J, nom: 'Lemaire', prenom: 'Robert', sexe: 'M', ddn: '1968-02-11', tel: '06 12 00 00 11', email: '', nir: '1 68 02 69 000 011 73', mutuelle: 'Groupama', exoneration: 'ald', prescripteur: { nom: 'Claire Morel', specialite: 'Neurologue', ville: 'Lyon 8e' },
+    { id: 'p_robert', praticienId: J, nom: 'Lemaire', prenom: 'Robert', sexe: 'M', ddn: '1968-02-11', tel: '06 12 00 00 11', email: '', nir: '1 68 02 69 000 011 73', mutuelle: 'Groupama', exoneration: 'ald', prescripteur: { nom: 'Claire Morel', specialite: 'Neurologue', ville: 'Lyon 8e', mssante: 'claire.morel@medecin.mssante.example' },
       antecedentsOph: 'Presbytie', antecedentsGen: 'Accident vasculaire cérébral occipital droit il y a quatre mois', correction: lunettes(oeil('0.50', '', '', '2.00'), oeil('0.50', '', '', '2.00')), ordonnance: null, rgpd: rgpd(-3) },
     { id: 'p_monique', praticienId: J, nom: 'Faure', prenom: 'Monique', sexe: 'F', ddn: '1959-07-23', tel: '04 78 00 00 12', email: '', nir: '2 59 07 69 000 012 19', mutuelle: 'Harmonie Mutuelle', exoneration: 'aucune', prescripteur: marchand,
       antecedentsOph: 'Glaucome chronique à angle ouvert traité par collyre depuis 2021', antecedentsGen: '', correction: lunettes(oeil('-1.50', '-0.75', '85', '2.25'), oeil('-1.25', '', '', '2.25')), ordonnance: null, rgpd: rgpd(-200) },
@@ -65,9 +66,9 @@ function patientsDemo(j) {
       antecedentsOph: '', antecedentsGen: '', correction: sans(), ordonnance: null, rgpd: rgpd(0, { representant: 'M. Éric Garnier, père' }) },
     { id: 'p_nadia', praticienId: J, nom: 'Haddad', prenom: 'Nadia', sexe: 'F', ddn: '1997-10-08', tel: '06 12 00 00 14', email: 'n.haddad@courriel.example', nir: '2 97 10 69 000 014 88', mutuelle: 'Alan', exoneration: 'aucune', prescripteur: marchand,
       antecedentsOph: '', antecedentsGen: '', correction: sans(), ordonnance: { date: j(-38), prescrites: 12, effectuees: 6, acte: '5.4', derniere: j(-4) }, rgpd: rgpd(-40, { transmission: 'ok', recherche: true }) },
-    { id: 'p_paul', praticienId: J, nom: 'Renard', prenom: 'Paul', sexe: 'M', ddn: '1981-06-02', tel: '06 12 00 00 15', email: '', nir: '1 81 06 69 000 015 61', mutuelle: 'Malakoff Humanis', exoneration: 'aucune', prescripteur: { nom: 'Claire Morel', specialite: 'Neurologue', ville: 'Lyon 8e' },
+    { id: 'p_paul', praticienId: J, nom: 'Renard', prenom: 'Paul', sexe: 'M', ddn: '1981-06-02', tel: '06 12 00 00 15', email: '', nir: '1 81 06 69 000 015 61', mutuelle: 'Malakoff Humanis', exoneration: 'aucune', prescripteur: { nom: 'Claire Morel', specialite: 'Neurologue', ville: 'Lyon 8e', mssante: 'claire.morel@medecin.mssante.example' },
       antecedentsOph: '', antecedentsGen: 'Traumatisme crânien il y a six mois', correction: sans(), ordonnance: null, rgpd: { information: '', transmission: '', rappels: false, recherche: false, representant: '', maj: '' } },
-  ];
+  ].map(P);
 }
 
 /* ---------- Bilans de démonstration ---------- */
@@ -114,7 +115,8 @@ function modelesBilans(j) {
       motif: { plaintes: { baisseAV: true, deviation: true }, notes: "La baisse de vision de l'œil gauche a été repérée lors du dépistage scolaire" },
       av: { ac: { vl: av3('10/10', '5/10', '10/10'), vp: av3('P2', 'P4', 'P2') } },
       om: { cover: { ac: { vl: dev('esoT', 6, 'fixOD'), vp: dev('esoT', 8, 'fixOD') } }, worth: { vl: 'neutOG', vp: 'neutOG' }, motilite: 'normale', stereo: lang('lang1') },
-      conclusion: { diag: { amblyopie: true, strabisme: true }, amblyopieOeil: 'OG', reeducation: true, nbSeances: 20, frequence: 'hebdo', occlusion: true, controle: '3 mois' } } },
+      conclusion: { diag: { amblyopie: true, strabisme: true }, amblyopieOeil: 'OG', reeducation: true, nbSeances: 20, frequence: 'hebdo', controle: '3 mois',
+        amblyo: { traitement: 'occlusion', statut: 'proposer', heures: '2', jours: '7', activitesVP: true, reevaluation: '6 semaines', bascule: true } } } },
     // Bilan basse vision, DMLA
     { id: 'b_jeanne', patientId: 'p_jeanne', date: j(0), type: 'basse-vision', statut: 'a-envoyer', data: {
       motif: { plaintes: { baisseAV: true, difficultesLecture: true, photophobie: true }, anciennete: 'plusieurs années', notes: 'La patiente souhaite pouvoir relire son courrier et continuer à cuisiner seule' },

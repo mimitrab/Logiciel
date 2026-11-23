@@ -9,7 +9,7 @@ import { CorrectionFields, SuiviOrdonnance } from './commun.jsx';
 
 const patientVide = () => ({
   id: '', nom: '', prenom: '', sexe: 'F', ddn: '', tel: '', email: '', nir: '', mutuelle: '', exoneration: 'aucune',
-  prescripteur: { nom: '', specialite: '', ville: '' }, antecedentsOph: '', antecedentsGen: '', correction: correctionVide(), ordonnance: null, rgpd: rgpdVide(),
+  prescripteur: { nom: '', specialite: '', ville: '', mssante: '' }, antecedentsOph: '', antecedentsGen: '', correction: correctionVide(), ordonnance: null, rgpd: rgpdVide(), ins: { qualifiee: false },
 });
 
 const nirFictif = (p) => {
@@ -124,6 +124,10 @@ export function PatientForm({ patient, onClose, onSaved }) {
         <Field label="Date de naissance" htmlFor="pf-ddn" hint={p.ddn ? ageTexte(p.ddn) : undefined}><Text id="pf-ddn" type="date" value={p.ddn} max={todayISO()} onChange={set('ddn')} className={erreur('ddn')} /></Field>
         <Field label="Téléphone" htmlFor="pf-tel"><Text id="pf-tel" value={p.tel} onChange={set('tel')} inputMode="tel" /></Field>
         <Field label="Courriel" htmlFor="pf-email"><Text id="pf-email" value={p.email} onChange={set('email')} inputMode="email" /></Field>
+        <div className="col-span-full">
+          <Chip id="pf-ins" checked={!!(p.ins && p.ins.qualifiee)} onChange={(v) => set('ins')({ qualifiee: v })}>Identité vérifiée sur pièce d'identité et INS qualifiée (téléservice INSi)</Chip>
+          <p className="mt-1 text-[11.5px] text-ink-3">Indispensable pour écrire au patient dans Mon espace santé. Dans cette version, la qualification est déclarative.</p>
+        </div>
 
         <Titre>Couverture sociale</Titre>
         <Field label="N° de sécurité sociale (fictif)" htmlFor="pf-nir">
@@ -139,6 +143,9 @@ export function PatientForm({ patient, onClose, onSaved }) {
         <Field label="Nom du médecin" htmlFor="pf-presc"><Text id="pf-presc" value={p.prescripteur.nom} onChange={setPresc('nom')} placeholder="Hélène Marchand" /></Field>
         <Field label="Spécialité" htmlFor="pf-spec"><Text id="pf-spec" value={p.prescripteur.specialite} onChange={setPresc('specialite')} placeholder="Ophtalmologiste" /></Field>
         <Field label="Ville" htmlFor="pf-pville"><Text id="pf-pville" value={p.prescripteur.ville} onChange={setPresc('ville')} /></Field>
+        <Field label="Adresse MSSanté du médecin" htmlFor="pf-pmssante" className="sm:col-span-2 lg:col-span-3" hint="Messagerie sécurisée de santé : sert à lui adresser vos comptes-rendus.">
+          <Text id="pf-pmssante" className="num" value={p.prescripteur.mssante || ''} onChange={setPresc('mssante')} placeholder="prenom.nom@medecin.mssante.fr" />
+        </Field>
 
         <Titre>Antécédents</Titre>
         <Field label="Ophtalmologiques" htmlFor="pf-atcd-oph" className="sm:col-span-2 lg:col-span-3"><Area id="pf-atcd-oph" value={p.antecedentsOph} onChange={set('antecedentsOph')} placeholder="Strabisme dans l'enfance, chirurgie, amblyopie traitée…" /></Field>
@@ -226,6 +233,8 @@ function Fiche({ patient, onBack }) {
               <Info label="Téléphone" mono>{patient.tel}</Info>
               <Info label="Courriel">{patient.email}</Info>
               <Info label="Médecin prescripteur">{presc.nom ? `Dr ${presc.nom}${presc.specialite ? `, ${presc.specialite.toLowerCase()}` : ''}${presc.ville ? ` (${presc.ville})` : ''}` : ''}</Info>
+              <Info label="MSSanté du prescripteur" mono>{presc.mssante}</Info>
+              <Info label="Identité nationale de santé (INS)">{patient.ins && patient.ins.qualifiee ? 'Qualifiée' : 'Non qualifiée'}</Info>
             </dl>
           </Card>
           <Card>

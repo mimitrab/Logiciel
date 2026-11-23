@@ -200,6 +200,32 @@ export const DIAGNOSTICS = [
   { k: 'neurovisuel', label: 'Trouble neurovisuel' },
   { k: 'normal', label: 'Bilan dans les limites de la normale' },
 ];
+/* ---------- Traitement de l'amblyopie ----------
+   [clé, libellé, forme indéfinie, forme définie] ; {de} reçoit l'œil traité (l'œil non amblyope). */
+export const TRAITEMENTS_AMBLYOPIE = [
+  ['occlusion', 'Occlusion par pansement (cache)', 'une occlusion {de} par pansement occlusif', "l'occlusion {de} par pansement occlusif"],
+  ['occlusionLunette', 'Occlusion sur le verre de lunette', 'une occlusion {de} sur le verre de lunette', "l'occlusion {de} sur le verre de lunette"],
+  ['ryser', 'Filtre de Ryser', 'une pénalisation {de} par filtre de Ryser', 'la pénalisation {de} par filtre de Ryser'],
+  ['penalOptique', 'Pénalisation optique', 'une pénalisation optique {de}', 'la pénalisation optique {de}'],
+  ['atropine', 'Pénalisation par atropine', "une pénalisation {de} par collyre à l'atropine, sur prescription médicale", "la pénalisation {de} par collyre à l'atropine"],
+];
+export const STATUTS_AMBLYOPIE = [['proposer', 'À proposer'], ['poursuivre', 'À poursuivre'], ['adapter', 'À adapter']];
+export const HEURES_TRAITEMENT = ['1', '2', '3', '4', '6'];
+export const REEVALUATIONS = ['4 semaines', '6 semaines', '2 mois', '3 mois'];
+export const amblyoVide = () => ({ traitement: '', statut: 'proposer', heures: '', tempsPlein: false, jours: '7', activitesVP: true, reevaluation: '', bascule: true });
+
+/* ---------- Envoi du compte-rendu ---------- */
+export const CANAUX_ENVOI = {
+  mssante: { label: 'Messagerie sécurisée de santé (MSSanté)', court: 'MSSanté' },
+  mes: { label: 'Messagerie Mon espace santé du patient', court: 'Mon espace santé' },
+  main: { label: 'Remis au patient (main propre ou courrier)', court: 'Remis au patient' },
+};
+/** Adresse de la messagerie Mon espace santé : matricule INS suivi de @patient.mssante.fr. */
+export const adresseMonEspaceSante = (p) => {
+  const matricule = String((p && p.nir) || '').replace(/\s+/g, '');
+  return matricule.length >= 13 ? `${matricule}@patient.mssante.fr` : '';
+};
+
 export const FREQUENCES = [
   ['hebdo', '1 séance par semaine', "à raison d'une séance par semaine"],
   ['bi', '2 séances par semaine', 'à raison de deux séances par semaine'],
@@ -246,6 +272,7 @@ export function bilanVide(patient, type) {
       occlusion: false,
       controle: '',
       commentaire: '',
+      amblyo: amblyoVide(),
     },
   };
 }
@@ -512,7 +539,12 @@ export const ACTIONS_JOURNAL = {
   'cr.generation': ['Génération du compte-rendu', 'bilans'],
   'cr.copie': ['Copie du compte-rendu', 'bilans'],
   'cr.export': ['Export PDF du compte-rendu', 'bilans'],
-  'cr.envoi': ['Compte-rendu marqué comme envoyé', 'bilans'],
+  'cr.envoi': ['Envoi du compte-rendu enregistré', 'bilans'],
+  'etat.chargement': ['Chargement des dossiers', 'acces'],
+  'mfa.activation': ['Activation de la double authentification', 'securite'],
+  'mfa.echec': ['Code de double authentification refusé', 'acces'],
+  'mfa.reinitialisation': ['Réinitialisation de la double authentification', 'administration'],
+  'compte.bloque': ['Compte bloqué après des échecs répétés', 'securite'],
   'rdv.creation': ['Création du rendez-vous', 'agenda'],
   'rdv.modification': ['Modification du rendez-vous', 'agenda'],
   'rdv.suppression': ['Suppression du rendez-vous', 'agenda'],

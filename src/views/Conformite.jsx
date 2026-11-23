@@ -1,11 +1,14 @@
 // Conformité et sécurité : état des lieux, journal d'audit, sauvegarde chiffrée, consentements.
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, Download, FileLock2, FolderOpen, ScrollText, ServerCog, ShieldCheck, TriangleAlert, Upload } from 'lucide-react';
 import { Btn, Card, CardHead, ConfirmBtn, Empty, Field, Notice, Pill, Segmented, Select, Text, cx, useApp } from '../ui.jsx';
 import { ACTIONS_JOURNAL, CATEGORIES_JOURNAL, TRANSMISSIONS, nomUtilisateur, rgpdVide, statutRgpd } from '../domain.js';
 import { chiffrementDisponible, chiffrer, dechiffrer } from '../crypto.js';
 import { remettreFichier } from '../pdf.js';
 import { vuePraticien } from '../store.js';
+import { statsDe } from '../stats.js';
+import { SERVEUR } from '../mode.js';
+import { api } from '../api.js';
 import { dateCourte, horodatage, nomComplet, slug, todayISO } from '../lib.js';
 import { useTelechargements } from './commun.jsx';
 
@@ -29,53 +32,62 @@ function Point({ ok, titre, children }) {
 function Synthese() {
   const { global } = useApp();
   const praticiens = global.utilisateurs.filter((u) => u.role === 'praticien');
-  const complets = global.patients.filter((p) => statutRgpd(p).complet).length;
+  const chiffres = praticiens.map((u) => [u, statsDe(global, u.id)]).filter(([, st]) => st.patients || !SERVEUR || global.stats);
+  const total = chiffres.reduce((n, [, st]) => n + st.patients, 0);
+  const complets = chiffres.reduce((n, [, st]) => n + st.rgpdOk, 0);
   return (
     <div className="flex flex-col gap-4">
-      <Notice tone="warn" icon={ServerCog} title="Hébergement HDS requis avant toute mise en production">
-        Cette version fonctionne entièrement dans votre navigateur : les données y sont stockées en clair, sur cet appareil, sans serveur. Elle convient pour une démonstration avec des patients fictifs. Dès qu'il s'agit de vrais patients, la loi impose de confier les données de santé à un hébergeur certifié HDS (Code de la santé publique, article L. 1111-8), avec une authentification forte des professionnels.
-      </Notice>
+      {SERVEUR ? (
+        <Notice tone="info" icon={ServerCog} title="Version de production">
+          Les données sont enregistrées sur le serveur du cabinet. Avant d'y saisir le premier vrai patient, vérifiez que la colonne de droite est entièrement traitée : contrat HDS signé avec l'hébergeur, documents RGPD rédigés, mentions légales complétées.
+        </Notice>
+      ) : (
+        <Notice tone="warn" icon={ServerCog} title="Démonstration : hébergement HDS requis pour de vrais patients">
+          Cette version fonctionne entièrement dans votre navigateur : les données y sont stockées en clair, sur cet appareil, sans serveur. Elle sert à découvrir le logiciel avec des patients fictifs. Pour de vrais patients, la loi impose un hébergeur certifié HDS (Code de la santé publique, article L. 1111-8) : c'est la version serveur de SACCADES.
+        </Notice>
+      )}
 
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <Card>
-          <CardHead icon={ShieldCheck} title="Mis en œuvre dans cette maquette" />
+          <CardHead icon={ShieldCheck} title={SERVEUR ? 'Mis en œuvre par le logiciel' : 'Mis en œuvre dans cette démonstration'} />
           <ul className="flex flex-col gap-3 px-4 py-4">
             <Point ok titre="Comptes nominatifs et rôles.">{praticiens.length} praticien{praticiens.length > 1 ? 's' : ''} et un super-administrateur, chacun avec son identifiant.</Point>
-            <Point ok titre="Cloisonnement par praticien.">Chaque dossier, rendez-vous, bilan et facture est rattaché à son praticien, et l'interface ne charge que les siens.</Point>
-            <Point ok titre="Accès exceptionnel du super-administrateur.">Il ne parcourt pas les dossiers médicaux : il doit déclarer un motif, un bandeau reste affiché, et le début comme la fin de l'accès sont consignés et visibles par le praticien.</Point>
-            <Point ok titre="Journal d'audit.">{global.journal.length} événements consignés : connexions, échecs, consultations de dossiers, exports, modifications.</Point>
-            <Point ok titre="Protection de la session.">Déconnexion automatique après {global.cabinet.inactivite} minutes d'inactivité, suspension après cinq échecs de connexion.</Point>
+            {SERVEUR && <Point ok titre="Double authentification.">Mot de passe d'au moins 12 caractères et code à usage unique (application d'authentification) à chaque connexion.</Point>}
+            <Point ok titre="Cloisonnement par praticien.">{SERVEUR ? "Appliqué par le serveur : un praticien ne reçoit jamais les dossiers d'un autre, et toute écriture hors de son périmètre est refusée." : "Chaque dossier, rendez-vous, bilan et facture est rattaché à son praticien, et l'interface ne charge que les siens."}</Point>
+            <Point ok titre="Accès exceptionnel du super-administrateur.">Il ne parcourt pas les dossiers médicaux : il doit déclarer un motif, l'accès est limité dans le temps{SERVEUR ? ' (une heure)' : ''}, et son début comme sa fin sont consignés et visibles par le praticien.</Point>
+            <Point ok titre="Journal d'audit.">{SERVEUR ? 'Tenu par le serveur, horodaté, protégé contre la modification et la suppression : connexions, échecs, chargements et consultations de dossiers, envois, exports.' : `${global.journal.length} événements consignés : connexions, échecs, consultations de dossiers, exports, modifications.`}</Point>
+            <Point ok titre="Protection de la session.">Déconnexion automatique après {global.cabinet.inactivite || 15} minutes d'inactivité, blocage temporaire après cinq échecs de connexion{SERVEUR ? ", cookie de session inaccessible aux scripts et limité au site" : ''}.</Point>
+            {SERVEUR && <Point ok titre="Échanges chiffrés et en-têtes de sécurité.">HTTPS imposé, politique de sécurité du contenu stricte, aucun script ni police chargés depuis un site tiers.</Point>}
             <Point ok titre="Sauvegarde chiffrée.">Export AES-256-GCM protégé par une phrase secrète, illisible sans elle.</Point>
-            <Point ok titre="Information et consentements des patients.">{complets} dossier{complets > 1 ? 's' : ''} sur {global.patients.length} à jour, avec la date de remise de la note d'information.</Point>
+            <Point ok titre="Information et consentements des patients.">{complets} dossier{complets > 1 ? 's' : ''} sur {total} à jour, avec la date de remise de la note d'information.</Point>
+            <Point ok titre="Comptes-rendus sans intelligence artificielle.">La rédaction suit des règles fixes : aucune donnée n'est transmise à un service extérieur.</Point>
           </ul>
           <div className="border-t border-line px-4 py-3">
             <p className="eyebrow mb-2">Répartition des données par praticien</p>
             <ul className="grid gap-1.5">
-              {praticiens.map((u) => {
-                const v = vuePraticien(global, u.id);
-                return (
-                  <li key={u.id} className="flex flex-wrap items-baseline justify-between gap-x-3 text-[13px]">
-                    <span className="font-medium text-ink">{nomUtilisateur(u)}</span>
-                    <span className="tnum font-mono text-[12.5px] text-ink-2">{v.patients.length} dossiers · {v.bilans.length} bilans · {v.rdvs.length} rendez-vous · {v.factures.length} factures</span>
-                  </li>
-                );
-              })}
+              {chiffres.map(([u, st]) => (
+                <li key={u.id} className="flex flex-wrap items-baseline justify-between gap-x-3 text-[13px]">
+                  <span className="font-medium text-ink">{nomUtilisateur(u)}</span>
+                  <span className="tnum font-mono text-[12.5px] text-ink-2">{st.patients} dossiers · {st.bilans} bilans · {st.rdvs} rendez-vous · {st.factures} factures</span>
+                </li>
+              ))}
             </ul>
           </div>
         </Card>
 
         <Card>
-          <CardHead icon={TriangleAlert} title="À mettre en place avant tout usage avec de vrais patients" />
+          <CardHead icon={TriangleAlert} title="À traiter avant d'accueillir de vrais patients" />
           <ul className="flex flex-col gap-3 px-4 py-4">
-            <Point titre="Hébergement certifié HDS.">La base de données et ses sauvegardes doivent être chez un hébergeur certifié. La liste des hébergeurs certifiés est publiée par l'Agence du numérique en santé.</Point>
-            <Point titre="Authentification forte.">Pro Santé Connect, avec l'e-CPS ou la carte CPS, à la place des mots de passe de cette maquette.</Point>
-            <Point titre="Contrôle d'accès côté serveur.">Dans un navigateur, le cloisonnement organise l'affichage mais ne protège pas les données : il doit être appliqué par le serveur.</Point>
-            <Point titre="Chiffrement.">En transit (TLS) et au repos. Ici, le stockage du navigateur n'est pas chiffré ; seule la sauvegarde exportée l'est.</Point>
-            <Point titre="Journal inaltérable.">Horodaté et conservé côté serveur, hors de portée des utilisateurs.</Point>
-            <Point titre="Documentation RGPD.">Registre des traitements (art. 30), analyse d'impact (art. 35), contrats de sous-traitance avec l'éditeur et l'hébergeur (art. 28).</Point>
+            <Point titre="Hébergement certifié HDS.">{SERVEUR ? "Contrat signé avec l'hébergeur, incluant les clauses propres aux données de santé ; base de données et sauvegardes dans la même offre certifiée." : "La base de données et ses sauvegardes doivent être chez un hébergeur certifié. La liste des hébergeurs certifiés est publiée par l'Agence du numérique en santé."}</Point>
+            <Point titre="Authentification Pro Santé Connect.">Connexion par e-CPS ou carte CPS, à demander auprès de l'Agence du numérique en santé ; la double authentification actuelle en tient lieu en attendant.</Point>
+            <Point titre="Statut du logiciel.">Les suggestions de conclusion et la règle de décision thérapeutique peuvent faire relever le logiciel de la réglementation des dispositifs médicaux : à faire évaluer avant toute diffusion à d'autres cabinets.</Point>
+            <Point titre="Identité nationale de santé (INS).">Qualification de l'identité par le téléservice INSi, obligatoire pour référencer et échanger les documents de santé.</Point>
+            <Point titre="Messageries sécurisées.">Boîte MSSanté chez un opérateur ; le raccordement direct du logiciel à MSSanté et à Mon espace santé suppose un référencement auprès de l'Agence du numérique en santé.</Point>
+            <Point titre="Documentation RGPD.">Registre des traitements (art. 30), analyse d'impact (art. 35), contrats de sous-traitance avec l'hébergeur (art. 28), note d'information des patients.</Point>
             <Point titre="Violations de données.">Procédure de notification à la CNIL dans les 72 heures (art. 33).</Point>
-            <Point titre="Conservation des dossiers.">Durées et archivage à fixer. Le référentiel de la CNIL pour les cabinets médicaux et paramédicaux sert de repère, à confirmer avec votre délégué à la protection des données.</Point>
-            <Point titre="Droits des patients.">Information à la première consultation, puis réponse aux demandes d'accès, de rectification et d'opposition.</Point>
+            <Point titre="Conservation des dossiers.">Durées et archivage à fixer avec votre délégué à la protection des données, en vous appuyant sur le référentiel de la CNIL pour les cabinets médicaux et paramédicaux.</Point>
+            <Point titre="Facturation.">La télétransmission des feuilles de soins (SESAM-Vitale) exige un logiciel agréé ; SACCADES suit les actes mais ne télétransmet pas.</Point>
+            <Point titre="Mentions légales.">Éditeur et hébergeur à renseigner dans les réglages du cabinet.</Point>
           </ul>
           <p className="border-t border-line px-4 py-3 text-[12px] leading-snug text-ink-3">Ces repères ne remplacent pas l'avis d'un délégué à la protection des données ou d'un conseil juridique.</p>
         </Card>
@@ -85,13 +97,27 @@ function Synthese() {
 }
 
 /* ---------- Journal d'audit ---------- */
+function useJournal() {
+  const { global, actions } = useApp();
+  const [liste, setListe] = useState(null);
+  useEffect(() => {
+    if (!SERVEUR) return;
+    Promise.resolve(actions.enregistrerMaintenant())
+      .then(() => api.get('/journal'))
+      .then((r) => setListe(r.journal))
+      .catch(() => setListe([]));
+  }, []);
+  return SERVEUR ? liste || [] : global.journal;
+}
+
 function Journal() {
   const { global, user, estAdmin } = useApp();
+  const journal = useJournal();
   const [categorie, setCategorie] = useState('');
   const [auteur, setAuteur] = useState('');
   const [limite, setLimite] = useState(80);
   const U = Object.fromEntries(global.utilisateurs.map((u) => [u.id, u]));
-  const visibles = global.journal.filter((e) => estAdmin || e.userId === user.id || e.praticienId === user.id);
+  const visibles = journal.filter((e) => estAdmin || e.userId === user.id || e.praticienId === user.id);
   const lignes = visibles.filter((e) => (!categorie || (ACTIONS_JOURNAL[e.action] || [])[1] === categorie) && (!auteur || e.userId === auteur));
   return (
     <Card className="overflow-hidden">
@@ -159,6 +185,12 @@ function Journal() {
 /* ---------- Sauvegarde chiffrée ---------- */
 function Sauvegarde() {
   const { global, user, estAdmin, actions, toast } = useApp();
+  if (SERVEUR && estAdmin)
+    return (
+      <Notice tone="info" icon={FileLock2} title="Sauvegardes de la base de données">
+        En production, la base est sauvegardée automatiquement par l'hébergeur certifié HDS : vérifiez dans votre contrat la fréquence, la durée de conservation et le chiffrement des sauvegardes, et testez une restauration au moins une fois par an. Chaque praticien peut en plus exporter ses propres dossiers, chiffrés, depuis cet écran.
+      </Notice>
+    );
   const dl = useTelechargements();
   const [phrase, setPhrase] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -244,7 +276,7 @@ function Sauvegarde() {
 
       <Card>
         <CardHead icon={Upload} title="Restaurer une sauvegarde" />
-        {estAdmin ? (
+        {estAdmin && !SERVEUR ? (
           <div className="flex flex-col gap-3 px-4 py-4">
             <p className="text-[13px] leading-relaxed text-ink-2">La restauration remplace toutes les données du cabinet par celles du fichier. Elle est réservée au super-administrateur et consignée au journal.</p>
             <Field label="Fichier de sauvegarde (.json)" htmlFor="sv-fichier">
@@ -266,7 +298,7 @@ function Sauvegarde() {
             </div>
           </div>
         ) : (
-          <p className="px-4 py-4 text-[13px] leading-relaxed text-ink-2">La restauration remplace l'ensemble des données du cabinet : elle est réservée au super-administrateur. Votre sauvegarde personnelle sert de copie de sécurité et de réponse à une demande de portabilité.</p>
+          <p className="px-4 py-4 text-[13px] leading-relaxed text-ink-2">{SERVEUR ? "Les données du cabinet sont restaurées par l'hébergeur, à partir de ses sauvegardes. Votre export personnel sert de copie de sécurité et de réponse à une demande de portabilité d'un patient." : "La restauration remplace l'ensemble des données du cabinet : elle est réservée au super-administrateur. Votre sauvegarde personnelle sert de copie de sécurité et de réponse à une demande de portabilité."}</p>
         )}
       </Card>
     </div>
@@ -283,8 +315,9 @@ function Consentements() {
         <CardHead icon={ShieldCheck} title="Information et consentements des patients" hint="chiffres par praticien" />
         <ul className="divide-y divide-line">
           {praticiens.map((u) => {
-            const ps = global.patients.filter((p) => p.praticienId === u.id);
-            const ok = ps.filter((p) => statutRgpd(p).complet).length;
+            const st = statsDe(global, u.id);
+            const ps = { length: st.patients };
+            const ok = st.rgpdOk;
             return (
               <li key={u.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <span className="text-[13.5px] font-medium text-ink">{nomUtilisateur(u)}</span>

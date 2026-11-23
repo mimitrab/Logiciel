@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import { Check, KeyRound, Pencil, RotateCcw, ShieldAlert, UserPlus, UserRound } from 'lucide-react';
 import { Area, Btn, Card, CardHead, Chip, ConfirmBtn, Field, Modal, Notice, Num, Pill, Segmented, Select, Text, cx, useApp } from '../ui.jsx';
 import { ACTIONS_JOURNAL, BAREME_DEFAUT, FAMILLES_ACTES, MOTIFS_ACCES, NORMES_DEFAUT, ZONES, cotation, nomUtilisateur, valeurAMY } from '../domain.js';
-import { vuePraticien } from '../store.js';
-import { dureeTexte, euro, horodatage, moisDe, num, todayISO } from '../lib.js';
+import { statsDe } from '../stats.js';
+import { SERVEUR } from '../mode.js';
+import { dureeTexte, euro, horodatage, num } from '../lib.js';
 
 /* ---------- Accès exceptionnel aux dossiers d'un praticien ---------- */
 function AccesForm({ praticien, onClose }) {
@@ -44,23 +45,10 @@ function AccesForm({ praticien, onClose }) {
 export function Supervision() {
   const { global, acces, go } = useApp();
   const [cible, setCible] = useState(null);
-  const T = todayISO();
-  const mois = moisDe(T);
   const praticiens = global.utilisateurs.filter((u) => u.role === 'praticien');
-  const somme = (l) => l.reduce((n, f) => n + f.montant, 0);
   const lignes = praticiens.map((u) => {
-    const v = vuePraticien(global, u.id);
-    const jour = v.rdvs.filter((r) => r.date === T);
-    return {
-      u,
-      patients: v.patients.length,
-      rdv: jour.length,
-      minutes: jour.reduce((n, r) => n + (r.duree || 0), 0),
-      aRediger: v.bilans.filter((b) => b.statut === 'brouillon').length,
-      aEnvoyer: v.bilans.filter((b) => b.statut === 'a-envoyer').length,
-      aFacturer: somme(v.factures.filter((f) => f.statut === 'a-facturer')),
-      mois: somme(v.factures.filter((f) => moisDe(f.date) === mois)),
-    };
+    const st = statsDe(global, u.id);
+    return { u, patients: st.patients, rdv: st.rdvJour, minutes: st.minutesJour, aRediger: st.aRediger, aEnvoyer: st.aEnvoyer, aFacturer: st.aFacturer, mois: st.mois };
   });
   const total = (k) => lignes.reduce((n, l) => n + l[k], 0);
   const U = Object.fromEntries(global.utilisateurs.map((u) => [u.id, u]));
@@ -146,6 +134,7 @@ export function Supervision() {
 }
 
 /* ---------- Comptes ---------- */
+const LONGUEUR = SERVEUR ? 12 : 10;
 function CompteForm({ compte, onClose }) {
   const { global, actions } = useApp();
   const [u, setU] = useState(compte || { id: '', role: 'praticien', identifiant: '', prenom: '', nom: '', titre: 'Orthoptiste', rpps: '' });
@@ -153,19 +142,18 @@ function CompteForm({ compte, onClose }) {
   const [essai, setEssai] = useState(false);
   const set = (k) => (v) => setU((x) => ({ ...x, [k]: v }));
   const identifiant = u.identifiant.trim().toLowerCase();
-  const doublon = global.utilisateurs.some((x) => x.id !== u.id && x.identifiant.toLowerCase() === identifiant);
+  const doublon = global.utilisateurs.some((x) => x.id !== u.id && (x.identifiant || '').toLowerCase() === identifiant);
   const erreurs = [
     !u.nom.trim() && 'Le nom est obligatoire.',
     !/^[a-z0-9._-]{3,}$/.test(identifiant) && "L'identifiant compte au moins 3 caractères : lettres, chiffres, point ou tiret.",
     doublon && 'Cet identifiant est déjà utilisé.',
-    !compte && mdp.length < 10 && 'Le mot de passe provisoire compte au moins 10 caractères.',
-    compte && mdp && mdp.length < 10 && 'Le nouveau mot de passe compte au moins 10 caractères.',
+    !compte && mdp.length < LONGUEUR && `Le mot de passe provisoire compte au moins ${LONGUEUR} caractères.`,
+    compte && mdp && mdp.length < LONGUEUR && `Le nouveau mot de passe compte au moins ${LONGUEUR} caractères.`,
   ].filter(Boolean);
-  const enregistrer = () => {
+  const enregistrer = async () => {
     setEssai(true);
     if (erreurs.length) return;
-    actions.enregistrerUtilisateur({ ...u, identifiant, nom: u.nom.trim(), prenom: u.prenom.trim() }, mdp || undefined);
-    onClose();
+    if (await actions.enregistrerUtilisateur({ ...u, identifiant, nom: u.nom.trim(), prenom: u.prenom.trim() }, mdp || undefined)) onClose();
   };
   return (
     <Modal
@@ -188,7 +176,7 @@ function CompteForm({ compte, onClose }) {
         </Field>
         <Field label="Titre" htmlFor="cf-titre"><Text id="cf-titre" value={u.titre} onChange={set('titre')} /></Field>
         <Field label="N° RPPS" htmlFor="cf-rpps"><Text id="cf-rpps" value={u.rpps} onChange={set('rpps')} /></Field>
-        <Field label={compte ? 'Réinitialiser le mot de passe (facultatif)' : 'Mot de passe provisoire'} htmlFor="cf-mdp" className="sm:col-span-2" hint="À transmettre à la personne par un canal sûr. Elle le changera depuis « Mon compte ».">
+        <Field label={compte ? 'Réinitialiser le mot de passe (facultatif)' : 'Mot de passe provisoire'} htmlFor="cf-mdp" className="sm:col-span-2" hint={SERVEUR ? 'À transmettre par un canal sûr. Il devra être changé à la première connexion, avec activation de la double authentification.' : 'À transmettre à la personne par un canal sûr. Elle le changera depuis « Mon compte ».'}>
           <Text id="cf-mdp" type="password" autoComplete="new-password" value={mdp} onChange={setMdp} />
         </Field>
       </div>
@@ -219,6 +207,7 @@ export function Utilisateurs() {
                 <th className="px-2 py-2.5 font-semibold">Rôle</th>
                 <th className="px-2 py-2.5 text-right font-semibold">Dossiers</th>
                 <th className="px-2 py-2.5 font-semibold">Dernière connexion</th>
+                {SERVEUR && <th className="px-2 py-2.5 font-semibold">Double authentification</th>}
                 <th className="px-2 py-2.5 font-semibold">État</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -239,11 +228,13 @@ export function Utilisateurs() {
                   </td>
                   <td className="px-2 py-2.5 font-mono text-[12.5px] text-ink-2">{u.identifiant}</td>
                   <td className="whitespace-nowrap px-2 py-2.5 text-ink-2">{u.role === 'admin' ? 'Super-administrateur' : 'Praticien'}</td>
-                  <td className="tnum px-2 py-2.5 text-right font-mono text-ink-2">{u.role === 'admin' ? '—' : global.patients.filter((p) => p.praticienId === u.id).length}</td>
+                  <td className="tnum px-2 py-2.5 text-right font-mono text-ink-2">{u.role === 'admin' ? '—' : statsDe(global, u.id).patients}</td>
                   <td className="tnum whitespace-nowrap px-2 py-2.5 font-mono text-[12.5px] text-ink-2">{u.derniereConnexion ? horodatage(u.derniereConnexion) : 'Jamais'}</td>
+                  {SERVEUR && <td className="px-2 py-2.5"><Pill tone={u.mfa ? 'ok' : 'warn'}>{u.mfa ? 'Activée' : 'À activer'}</Pill></td>}
                   <td className="px-2 py-2.5"><Pill tone={u.actif ? 'ok' : 'neutral'}>{u.actif ? 'Actif' : 'Désactivé'}</Pill></td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
                     <Btn size="sm" variant="ghost" icon={Pencil} onClick={() => setForm({ compte: u })}>Modifier</Btn>
+                    {SERVEUR && u.mfa && u.id !== user.id && <ConfirmBtn label="Réinit. 2FA" confirmLabel="Réinitialiser la 2FA" onConfirm={() => actions.reinitialiserMfa(u.id)} />}
                     {u.id !== user.id && (u.actif ? <ConfirmBtn label="Désactiver" confirmLabel="Confirmer" onConfirm={() => actions.basculerActif(u.id)} /> : <Btn size="sm" variant="ghost" onClick={() => actions.basculerActif(u.id)}>Réactiver</Btn>)}
                   </td>
                 </tr>
@@ -298,12 +289,20 @@ export function Reglages() {
         <Card>
           <CardHead title="Coordonnées du cabinet" hint="en-tête des comptes-rendus" />
           <div className="grid gap-3 px-4 py-4 sm:grid-cols-2">
+            <p className="text-[12px] text-ink-3 sm:col-span-2">Les mentions légales, visibles depuis la page de connexion, sont en bas de ce bloc.</p>
             <Field label="Nom du cabinet" htmlFor="rg-nom" className="sm:col-span-2"><Text id="rg-nom" value={c.nom} onChange={set('nom')} /></Field>
             <Field label="Adresse" htmlFor="rg-adresse" className="sm:col-span-2"><Text id="rg-adresse" value={c.adresse} onChange={set('adresse')} /></Field>
             <Field label="Code postal" htmlFor="rg-cp"><Text id="rg-cp" value={c.cp} onChange={set('cp')} /></Field>
             <Field label="Ville" htmlFor="rg-ville"><Text id="rg-ville" value={c.ville} onChange={set('ville')} /></Field>
             <Field label="Téléphone" htmlFor="rg-tel"><Text id="rg-tel" value={c.tel} onChange={set('tel')} /></Field>
             <Field label="Courriel" htmlFor="rg-email"><Text id="rg-email" value={c.email} onChange={set('email')} /></Field>
+            <Field label="Éditeur du site (mentions légales)" htmlFor="rg-editeur" className="sm:col-span-2" hint="Nom ou raison sociale, adresse, numéro SIRET le cas échéant.">
+              <Area id="rg-editeur" value={c.editeur || ''} onChange={set('editeur')} />
+            </Field>
+            <Field label="Hébergeur" htmlFor="rg-hebergeur" className="sm:col-span-2" hint="Raison sociale, adresse et téléphone de l'hébergeur certifié HDS.">
+              <Area id="rg-hebergeur" value={c.hebergeur || ''} onChange={set('hebergeur')} />
+            </Field>
+            <Field label="Contact pour les données personnelles" htmlFor="rg-contact" className="sm:col-span-2"><Text id="rg-contact" value={c.contact || ''} onChange={set('contact')} placeholder="Adresse de contact ou délégué à la protection des données" /></Field>
           </div>
         </Card>
 
@@ -378,7 +377,7 @@ export function Reglages() {
         </div>
       </Card>
 
-      <Card>
+      {!SERVEUR && <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
           <div className="min-w-0">
             <p className="text-[13.5px] font-medium text-ink">Données de démonstration</p>
@@ -386,7 +385,7 @@ export function Reglages() {
           </div>
           <ConfirmBtn label="Réinitialiser" confirmLabel="Tout effacer et recharger" icon={RotateCcw} size="md" onConfirm={() => actions.reinitialiser()} />
         </div>
-      </Card>
+      </Card>}
     </div>
   );
 }

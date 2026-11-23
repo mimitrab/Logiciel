@@ -1,7 +1,7 @@
 // Générateur du compte-rendu : transforme les données saisies en courrier médical rédigé.
 import { age, ageTexte, cap, dateCourte, dateLongue, fr, liste, num } from './lib.js';
 import {
-  CIRCONSTANCES, CONCLUSIONS_COULEURS, CV_DEFICITS, CV_TECHNIQUES, DEVIATIONS, FREQUENCES, NORMES_DEFAUT, PLAINTES, PRECISIONS, RESULTATS_CLASSEMENT, STEREO, TEMPS_ECRAN, TESTS_CLASSEMENT, TYPES_BILAN, WORTH,
+  CIRCONSTANCES, CONCLUSIONS_COULEURS, TRAITEMENTS_AMBLYOPIE, CV_DEFICITS, CV_TECHNIQUES, DEVIATIONS, FREQUENCES, NORMES_DEFAUT, PLAINTES, PRECISIONS, RESULTATS_CLASSEMENT, STEREO, TEMPS_ECRAN, TESTS_CLASSEMENT, TYPES_BILAN, WORTH,
   completude, coverReference, evalFusion, evalPPC, indicationReeducation, lectureLang, nomUtilisateur, normesTexte,
 } from './domain.js';
 
@@ -326,6 +326,28 @@ function objectifs(d, type) {
   return o;
 }
 
+/** Paragraphe du traitement de l'amblyopie : moyen, œil traité, durée quotidienne, suivi. */
+function traitementAmblyopie(d) {
+  const k = d.conclusion;
+  const a = k.amblyo || {};
+  const t = TRAITEMENTS_AMBLYOPIE.find((x) => x[0] === a.traitement);
+  if (!k.diag.amblyopie || !t) return '';
+  const amb = k.amblyopieOeil;
+  const de = amb === 'OG' ? "de l'œil droit (œil non amblyope)" : amb === 'OD' ? "de l'œil gauche (œil non amblyope)" : "de l'œil non amblyope";
+  const h = num(a.heures);
+  const jours = a.jours && a.jours !== '7' ? `${a.jours} jours sur 7` : '7 jours sur 7';
+  const duree = a.tempsPlein ? "en permanence, pendant toutes les heures d'éveil" : h ? `${fr(h)} heure${h >= 2 ? 's' : ''} par jour, ${jours}` : '';
+  let s;
+  if (a.statut === 'poursuivre') s = `Je propose de poursuivre ${t[3].replace('{de}', de)}${duree ? `, ${duree}` : ''}.`;
+  else if (a.statut === 'adapter') s = `Je propose d'adapter le traitement de l'amblyopie : ${t[2].replace('{de}', de)}${duree ? `, désormais ${duree}` : ''}.`;
+  else s = `Pour le traitement de l'amblyopie, je propose, sous réserve de votre accord, ${t[2].replace('{de}', de)}${duree ? `, ${duree}` : ''}.`;
+  const suite = [];
+  if (a.activitesVP) suite.push('Le temps de traitement sera mis à profit pour des activités en vision de près (lecture, dessin, jeux).');
+  if (a.reevaluation) suite.push(`Une réévaluation de l'acuité visuelle est prévue dans ${a.reevaluation}.`);
+  if (a.bascule) suite.push("L'acuité visuelle de l'œil non amblyope sera surveillée afin de dépister une amblyopie à bascule.");
+  return [s, ...suite].join(' ');
+}
+
 /* ---------- Courrier complet ----------
    ctx : { cabinet, praticien, normes } */
 export function genererCorps(patient, bilan, ctx) {
@@ -452,13 +474,15 @@ export function genererCorps(patient, bilan, ctx) {
       else projet.push("En l'absence de signe fonctionnel associé, les anomalies relevées à l'examen ne constituent pas, à ce jour, une indication de rééducation orthoptique.");
       if (k.exercices) projet.push('Des exercices simples à réaliser à domicile ont été expliqués.');
     } else if (k.exercices) projet.push('Des exercices à réaliser à domicile ont été expliqués.');
-    if (k.occlusion) projet.push("Un traitement par occlusion ou pénalisation optique est à discuter selon votre appréciation.");
+    const amblyo = traitementAmblyopie(d);
+    if (amblyo) projet.push(amblyo);
+    else if (k.occlusion) projet.push("Un traitement par occlusion ou pénalisation optique est à discuter selon votre appréciation.");
     if (k.prismation) projet.push('Une prismation pourra être discutée en cas de persistance de la gêne fonctionnelle.');
     if (k.avisOphtalmo && !k.diag.paralysie) projet.push('Un contrôle ophtalmologique avec vérification de la réfraction me paraît souhaitable.');
     if (k.conseils) projet.push("Des conseils d'hygiène visuelle ont été donnés (pauses régulières, distance de travail et éclairage adaptés).");
     if (k.controle) projet.push(`Je propose de revoir ${id.court} pour un bilan de contrôle dans ${k.controle}.`);
     if (projet.length) {
-      titre(propose ? 'Projet thérapeutique' : 'Conduite à tenir');
+      titre(propose || amblyo ? 'Projet thérapeutique' : 'Conduite à tenir');
       P(projet.join(' '));
     }
   }

@@ -476,6 +476,11 @@
     overflow: hidden;
     border-radius: 3px;
   }
+  .paper-body:hover {
+    outline: 1px dashed var(--paper-line);
+    outline-offset: 6px;
+    cursor: text;
+  }
   .paper-body:focus,
   .paper-body:focus-visible {
     outline: 2px solid var(--paper-accent);

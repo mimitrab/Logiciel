@@ -26,6 +26,30 @@ export function useTelechargements() {
   return dl;
 }
 
+/** Copie un texte ; repli sur une zone de texte sélectionnée si l'API du presse-papiers est refusée. */
+export async function copierTexte(texte) {
+  try {
+    await navigator.clipboard.writeText(texte);
+    return true;
+  } catch (e) {
+    const zone = document.createElement('textarea');
+    zone.value = texte;
+    zone.setAttribute('readonly', '');
+    zone.style.position = 'fixed';
+    zone.style.opacity = '0';
+    document.body.appendChild(zone);
+    zone.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (err) {
+      ok = false;
+    }
+    document.body.removeChild(zone);
+    return ok;
+  }
+}
+
 /** Puissance en dioptries : boutons − et + pour le signe, saisie directe acceptée (« -1,25 »). */
 export function Dioptrie({ id, label, value, onChange, signe = true }) {
   const brut = String(value ?? '');

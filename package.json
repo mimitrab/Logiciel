@@ -1,15 +1,30 @@
 {
   "name": "saccades",
   "private": true,
-  "version": "0.2.0",
-  "description": "Prototype de gestion de cabinet d'orthoptie et de génération de bilans",
+  "version": "0.3.0",
+  "description": "SACCADES : logiciel de cabinet d'orthoptie (agenda, dossiers, bilans, facturation)",
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "start": "node server/index.js",
+    "construire": "node build.mjs"
   },
   "devDependencies": {
+    "@fontsource/ibm-plex-mono": "^5.1.1",
+    "@fontsource/ibm-plex-sans": "^5.1.1",
+    "@fontsource/red-hat-display": "^5.1.1",
     "esbuild": "^0.25.0",
+    "jspdf": "^2.5.1",
     "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tailwindcss": "^3.4.17"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

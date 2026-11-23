@@ -1,12 +1,18 @@
-// Coque de l'application : connexion, rôles, navigation, état partagé et journal d'audit.
+// Coque de l'application : connexion, rôles, navigation, état partagé, journal d'audit.
+// En démonstration, l'état vit dans le navigateur. En mode serveur, il est chargé depuis l'API
+// et chaque modification est synchronisée ; le serveur applique lui-même le cloisonnement.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, CalendarDays, ClipboardList, HardDrive, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Settings, ShieldAlert, ShieldCheck, TriangleAlert, UserCog, Users } from 'lucide-react';
+import { createRoot } from 'react-dom/client';
+import { Activity, CalendarDays, ClipboardList, Cloud, CloudOff, HardDrive, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Settings, ShieldAlert, ShieldCheck, TriangleAlert, UserCog, Users } from 'lucide-react';
 import { AppCtx, Btn, Field, IconBtn, Logo, Modal, Text, Toasts, cx } from './ui.jsx';
-import { acteDuBilan, charger, enregistrer, etatDemo, ops, session as stockSession, vuePraticien } from './store.js';
+import { acteDuBilan, charger, enregistrer, etatDemo, normaliser, ops, session as stockSession, vuePraticien } from './store.js';
 import { acteDe, cotation, nomUtilisateur } from './domain.js';
 import { creerAuth, verifierAuth } from './crypto.js';
+import { api, differences } from './api.js';
+import { MODE, SERVEUR } from './mode.js';
 import { dateCourte, horodatage, nomComplet, todayISO, uid } from './lib.js';
 import Login from './views/Login.jsx';
+import Mentions from './views/Mentions.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Agenda from './views/Agenda.jsx';
 import Patients from './views/Patients.jsx';
@@ -27,6 +33,7 @@ const MODULES = {
   reglages: { label: 'Réglages du cabinet', court: 'Réglages', icon: Settings },
 };
 const CLINIQUES = ['accueil', 'agenda', 'patients', 'bilans', 'facturation'];
+const LONGUEUR_MDP = SERVEUR ? 12 : 10;
 
 function MonCompte({ onClose }) {
   const { user, actions } = React.useContext(AppCtx);
@@ -35,19 +42,19 @@ function MonCompte({ onClose }) {
   const [erreur, setErreur] = useState('');
   const set = (k) => (v) => setP((x) => ({ ...x, [k]: v }));
   const setM = (k) => (v) => setMdp((x) => ({ ...x, [k]: v }));
-  const enregistrer = () => {
+  const enregistrer = async () => {
     if (mdp.nouveau || mdp.actuel) {
-      if (mdp.nouveau.length < 10) return setErreur('Le nouveau mot de passe doit compter au moins 10 caractères.');
+      if (mdp.nouveau.length < LONGUEUR_MDP) return setErreur(`Le nouveau mot de passe doit compter au moins ${LONGUEUR_MDP} caractères.`);
       if (mdp.nouveau !== mdp.confirmation) return setErreur('La confirmation ne correspond pas au nouveau mot de passe.');
-      if (!actions.changerMotDePasse(mdp.actuel, mdp.nouveau)) return setErreur('Le mot de passe actuel est incorrect.');
+      if (!(await actions.changerMotDePasse(mdp.actuel, mdp.nouveau))) return setErreur('Le mot de passe actuel est incorrect.');
     }
-    actions.enregistrerProfil(p);
+    await actions.enregistrerProfil(p);
     return onClose();
   };
   return (
     <Modal
       title="Mon compte"
-      subtitle={`Identifiant : ${user.identifiant}`}
+      subtitle={`Identifiant : ${user.identifiant || '—'}`}
       onClose={onClose}
       footer={
         <>
@@ -66,7 +73,7 @@ function MonCompte({ onClose }) {
       <h3 className="eyebrow mt-5 border-t border-line pt-4">Changer le mot de passe</h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <Field label="Mot de passe actuel" htmlFor="mc-actuel"><Text id="mc-actuel" type="password" autoComplete="current-password" value={mdp.actuel} onChange={setM('actuel')} /></Field>
-        <Field label="Nouveau (10 caractères min.)" htmlFor="mc-nouveau"><Text id="mc-nouveau" type="password" autoComplete="new-password" value={mdp.nouveau} onChange={setM('nouveau')} /></Field>
+        <Field label={`Nouveau (${LONGUEUR_MDP} caractères min.)`} htmlFor="mc-nouveau"><Text id="mc-nouveau" type="password" autoComplete="new-password" value={mdp.nouveau} onChange={setM('nouveau')} /></Field>
         <Field label="Confirmation" htmlFor="mc-confirmation"><Text id="mc-confirmation" type="password" autoComplete="new-password" value={mdp.confirmation} onChange={setM('confirmation')} /></Field>
       </div>
     </Modal>
@@ -74,29 +81,18 @@ function MonCompte({ onClose }) {
 }
 
 function App() {
-  const [state, setState] = useState(charger);
-  const [sess, setSess] = useState(() => stockSession.lire());
+  const [state, setState] = useState(() => (SERVEUR ? null : charger()));
+  const [sess, setSess] = useState(() => (SERVEUR ? null : stockSession.lire()));
+  const [etapeLogin, setEtapeLogin] = useState(SERVEUR ? 'chargement' : null);
   const ref = useRef(state);
   ref.current = state;
   const sessRef = useRef(sess);
   sessRef.current = sess;
   const [stockage, setStockage] = useState(true);
+  const [sync, setSync] = useState('ok');
   const [route, setRoute] = useState({ vue: null });
   const [toasts, setToasts] = useState([]);
   const [modal, setModal] = useState(null);
-
-  useEffect(() => {
-    setStockage(enregistrer(state));
-  }, [state]);
-  useEffect(() => {
-    stockSession.ecrire(sess);
-  }, [sess]);
-
-  const user = sess ? state.utilisateurs.find((u) => u.id === sess.userId && u.actif) : null;
-  const estAdmin = !!user && user.role === 'admin';
-  const acces = estAdmin && sess.acces ? sess.acces : null;
-  const portee = user ? (estAdmin ? (acces ? acces.praticienId : null) : user.id) : null;
-  const praticien = portee ? state.utilisateurs.find((u) => u.id === portee) : null;
 
   const toast = useCallback((message, tone) => {
     const id = uid('t');
@@ -104,12 +100,102 @@ function App() {
     setTimeout(() => setToasts((l) => l.filter((x) => x.id !== id)), 3800);
   }, []);
 
+  /* ---------- Démonstration : persistance dans le navigateur ---------- */
+  useEffect(() => {
+    if (!SERVEUR && state) setStockage(enregistrer(state));
+  }, [state]);
+  useEffect(() => {
+    if (!SERVEUR) stockSession.ecrire(sess);
+  }, [sess]);
+
+  /* ---------- Serveur : chargement et synchronisation ---------- */
+  const base = useRef(null);
+  const envoi = useRef({ enCours: false, aRefaire: false, minuteur: null });
+  const quitterSession = useCallback((message) => {
+    base.current = null;
+    setState(null);
+    setSess(null);
+    setModal(null);
+    setEtapeLogin('identifiants');
+    if (message) toast(message);
+  }, []);
+  const chargerEtat = useCallback(async () => {
+    const e = normaliser(await api.get('/etat'));
+    base.current = e;
+    setState(e);
+    setSess({ userId: e.moi, acces: e.acces });
+    setEtapeLogin(null);
+    return e;
+  }, []);
+  const synchroniser = useCallback(async () => {
+    const s = envoi.current;
+    clearTimeout(s.minuteur);
+    if (s.enCours) {
+      s.aRefaire = true;
+      return;
+    }
+    const avant = base.current;
+    const apres = ref.current;
+    if (!avant || !apres || avant === apres) return;
+    const { ops: o, journal } = differences(avant, apres);
+    const compteurFacture = apres.compteurFacture !== avant.compteurFacture ? apres.compteurFacture : undefined;
+    base.current = apres;
+    if (!o.length && !journal.length && compteurFacture === undefined) return;
+    s.enCours = true;
+    setSync('envoi');
+    try {
+      const r = await api.post('/synchro', { ops: o, journal, compteurFacture });
+      setSync('ok');
+      if (r && r.refuses && r.refuses.length) toast(`${r.refuses.length} modification(s) refusée(s) par le serveur : droits insuffisants.`, 'danger');
+    } catch (err) {
+      if (err.status === 401) {
+        s.enCours = false;
+        quitterSession('Session expirée : reconnectez-vous. Les dernières modifications non enregistrées sont perdues.');
+        return;
+      }
+      base.current = avant;
+      setSync('erreur');
+      s.minuteur = setTimeout(synchroniser, 5000);
+    }
+    s.enCours = false;
+    if (s.aRefaire) {
+      s.aRefaire = false;
+      synchroniser();
+    }
+  }, []);
+  useEffect(() => {
+    if (!SERVEUR) return undefined;
+    api
+      .get('/session')
+      .then((r) => (r.etape === 'ok' ? chargerEtat() : setEtapeLogin(r.etape)))
+      .catch(() => setEtapeLogin('identifiants'));
+    const avertir = (e) => {
+      if (sync !== 'ok' || (base.current && base.current !== ref.current)) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', avertir);
+    return () => window.removeEventListener('beforeunload', avertir);
+  }, []);
+  useEffect(() => {
+    if (!SERVEUR || !state || !base.current || base.current === state) return;
+    clearTimeout(envoi.current.minuteur);
+    envoi.current.minuteur = setTimeout(synchroniser, 500);
+  }, [state]);
+
+  const user = sess && state ? state.utilisateurs.find((u) => u.id === sess.userId && u.actif !== false) : null;
+  const estAdmin = !!user && user.role === 'admin';
+  const acces = estAdmin && sess.acces ? sess.acces : null;
+  const portee = user ? (estAdmin ? (acces ? acces.praticienId : null) : user.id) : null;
+  const praticien = portee ? state.utilisateurs.find((u) => u.id === portee) : null;
+
   const actions = useMemo(() => {
     const run = (f) => setState((s) => f(s));
     const moi = () => (sessRef.current ? sessRef.current.userId : null);
     const perimetre = () => {
       const s = sessRef.current;
-      const u = s && ref.current.utilisateurs.find((x) => x.id === s.userId);
+      const u = s && ref.current && ref.current.utilisateurs.find((x) => x.id === s.userId);
       if (!u) return null;
       return u.role === 'admin' ? (s.acces ? s.acces.praticienId : null) : u.id;
     };
@@ -119,8 +205,22 @@ function App() {
       const p = patient(id);
       return p ? nomComplet(p) : '';
     };
+    /** Appel au serveur puis rechargement de l'état ; l'erreur est affichée plutôt que levée. */
+    const serveur = async (f, message) => {
+      try {
+        await synchroniser();
+        await f();
+        await chargerEtat();
+        if (message) toast(message);
+        return true;
+      } catch (e) {
+        if (e.status === 401) quitterSession('Session expirée : reconnectez-vous.');
+        else toast(e.message, 'danger');
+        return false;
+      }
+    };
 
-    const api = {
+    const api_ = {
       /* ----- Connexion et session ----- */
       connexion(identifiant, motDePasse) {
         const saisi = identifiant.trim();
@@ -134,24 +234,51 @@ function App() {
         setRoute({ vue: null });
         return true;
       },
-      deconnexion(auto) {
+      async connecte() {
+        try {
+          await chargerEtat();
+          setRoute({ vue: null });
+        } catch (e) {
+          setEtapeLogin('identifiants');
+          toast(e.message, 'danger');
+        }
+      },
+      async deconnexion(auto) {
         const s = sessRef.current;
         if (!s) return;
-        if (s.acces) api.fermerAcces(true);
+        if (SERVEUR) {
+          await synchroniser();
+          try {
+            await api.post('/deconnexion');
+          } catch (e) {
+            /* la session est de toute façon fermée côté navigateur */
+          }
+          quitterSession(auto ? "Session fermée après une période d'inactivité." : null);
+          return;
+        }
+        if (s.acces) api_.fermerAcces(true);
         run((st) => ops.journal(st, { userId: s.userId, action: auto ? 'deconnexion.auto' : 'deconnexion' }));
         setSess(null);
         setModal(null);
         if (auto) toast("Session fermée après une période d'inactivité.");
       },
-      ouvrirAcces(praticienId, motif, precision) {
+      async ouvrirAcces(praticienId, motif, precision) {
+        if (SERVEUR) {
+          if (await serveur(() => api.post('/acces', { praticienId, motif, precision }))) setRoute({ vue: 'accueil' });
+          return;
+        }
         const p = ref.current.utilisateurs.find((u) => u.id === praticienId);
         run((st) => ops.journal(st, { userId: moi(), action: 'acces.debut', praticienId, cible: `Dossiers de ${nomUtilisateur(p)}`, detail: `Motif : ${motif.charAt(0).toLowerCase() + motif.slice(1)}.${precision.trim() ? ` ${precision.trim()}` : ''}` }));
         setSess((s) => ({ ...s, acces: { praticienId, motif, debut: Date.now() } }));
         setRoute({ vue: 'accueil' });
       },
-      fermerAcces(silencieux) {
+      async fermerAcces(silencieux) {
         const a = sessRef.current && sessRef.current.acces;
         if (!a) return;
+        if (SERVEUR) {
+          if (await serveur(() => api.post('/acces/fin'), silencieux ? null : 'Accès exceptionnel terminé et consigné au journal.')) setRoute({ vue: 'supervision' });
+          return;
+        }
         const p = ref.current.utilisateurs.find((u) => u.id === a.praticienId);
         run((st) => ops.journal(st, { userId: moi(), action: 'acces.fin', praticienId: a.praticienId, cible: `Dossiers de ${nomUtilisateur(p)}`, detail: `Durée : ${Math.max(1, Math.round((Date.now() - a.debut) / 60000))} min` }));
         setSess((s) => (s ? { ...s, acces: null } : s));
@@ -204,7 +331,7 @@ function App() {
         const brouillon = ref.current.bilans.find((b) => b.patientId === patientId && b.statut === 'brouillon');
         if (brouillon) {
           toast('Un bilan était déjà en cours pour ce patient : il est rouvert.');
-          api.go('bilans', { bilanId: brouillon.id });
+          api_.go('bilans', { bilanId: brouillon.id });
           return;
         }
         const id = uid('b');
@@ -218,10 +345,12 @@ function App() {
         toast('Compte-rendu généré');
       },
       editerCR: (id, texte) => run((s) => ops.editerCR(s, id, texte)),
-      statutBilan(id, statut) {
+      statutBilan: (id, statut) => run((s) => ops.statutBilan(s, id, statut)),
+      enregistrerEnvoi(id, envois) {
         const b = ref.current.bilans.find((x) => x.id === id);
-        run((s) => (statut === 'envoye' ? trace(ops.statutBilan(s, id, statut), 'cr.envoi', { cible: b ? nomDe(b.patientId) : '' }) : ops.statutBilan(s, id, statut)));
-        if (statut === 'envoye') toast('Compte-rendu marqué comme envoyé');
+        const horodates = envois.map((e) => ({ ...e, ts: Date.now() }));
+        run((s) => trace(ops.enregistrerEnvoi(s, id, horodates), 'cr.envoi', { cible: b ? nomDe(b.patientId) : '', detail: envois.map((e) => `${e.canal === 'mssante' ? 'MSSanté' : e.canal === 'mes' ? 'Mon espace santé' : 'remis au patient'} : ${e.destinataire}`).join(' ; ') }));
+        toast('Envoi enregistré dans le dossier et au journal');
       },
       supprimerBilan(id) {
         const b = ref.current.bilans.find((x) => x.id === id);
@@ -236,13 +365,13 @@ function App() {
         if (!bilan) return;
         if (s.factures.some((f) => f.bilanId === bilanId)) {
           toast('Ce bilan est déjà facturé.');
-          api.go('facturation');
+          api_.go('facturation');
           return;
         }
         const propose = acteDuBilan(s, bilan);
         run((st) => trace(ops.ajouterFacture(st, { patientId: bilan.patientId, acteCode: propose.code, bilanId, date: bilan.date }), 'facture.creation', { cible: nomDe(bilan.patientId), detail: cotation(acteDe(s.bareme, propose.code).coef) }));
         toast(`Facture préparée : acte sélectionné automatiquement (${propose.raison}).`);
-        api.go('facturation');
+        api_.go('facturation');
       },
       ajouterFacture(params) {
         run((s) => trace(ops.ajouterFacture(s, params), 'facture.creation', { cible: nomDe(params.patientId), detail: cotation(params.coef) }));
@@ -254,12 +383,18 @@ function App() {
       },
 
       /* ----- Administration ----- */
-      enregistrerReglages(payload) {
+      async enregistrerReglages(payload) {
+        if (SERVEUR) return serveur(() => api.put('/reglages', payload), 'Réglages enregistrés');
         run((s) => trace(ops.enregistrerReglages(s, payload), 'reglages.modification'));
         toast('Réglages enregistrés');
+        return true;
       },
-      enregistrerUtilisateur(u, motDePasse) {
+      async enregistrerUtilisateur(u, motDePasse) {
         const nouveau = !u.id;
+        if (SERVEUR) {
+          const corps = { identifiant: u.identifiant, role: u.role, prenom: u.prenom, nom: u.nom, titre: u.titre, rpps: u.rpps, motDePasse };
+          return serveur(() => (nouveau ? api.post('/utilisateurs', corps) : api.put(`/utilisateurs/${u.id}`, corps)), nouveau ? `Compte créé pour ${nomUtilisateur(u)}` : 'Compte mis à jour');
+        }
         const complet = nouveau ? { ...u, id: uid('u'), actif: true, derniereConnexion: 0, auth: creerAuth(motDePasse) } : motDePasse ? { ...u, auth: creerAuth(motDePasse) } : u;
         run((s) => {
           let st = trace(ops.enregistrerUtilisateur(s, complet), nouveau ? 'utilisateur.creation' : 'utilisateur.modification', { cible: nomUtilisateur(complet) });
@@ -267,29 +402,50 @@ function App() {
           return st;
         });
         toast(nouveau ? `Compte créé pour ${nomUtilisateur(complet)}` : 'Compte mis à jour');
+        return true;
       },
-      basculerActif(id) {
-        const s = ref.current;
-        const u = s.utilisateurs.find((x) => x.id === id);
+      async basculerActif(id) {
+        const u = ref.current.utilisateurs.find((x) => x.id === id);
         if (!u) return;
-        if (u.id === moi()) return toast('Vous ne pouvez pas désactiver votre propre compte.', 'danger');
+        if (u.id === moi()) {
+          toast('Vous ne pouvez pas désactiver votre propre compte.', 'danger');
+          return;
+        }
+        const message = u.actif ? 'Compte désactivé : la connexion est bloquée, les dossiers sont conservés.' : 'Compte réactivé';
+        if (SERVEUR) {
+          await serveur(() => api.put(`/utilisateurs/${id}`, { actif: !u.actif }), message);
+          return;
+        }
         run((st) => trace(ops.enregistrerUtilisateur(st, { ...u, actif: !u.actif }), u.actif ? 'utilisateur.desactivation' : 'utilisateur.reactivation', { cible: nomUtilisateur(u) }));
-        toast(u.actif ? 'Compte désactivé : la connexion est bloquée, les dossiers sont conservés.' : 'Compte réactivé');
+        toast(message);
       },
-      enregistrerProfil(profil) {
+      async reinitialiserMfa(id) {
+        await serveur(() => api.put(`/utilisateurs/${id}`, { reinitialiserMfa: true }), 'Double authentification réinitialisée : elle sera à réactiver à la prochaine connexion.');
+      },
+      async enregistrerProfil(profil) {
+        if (SERVEUR) return serveur(() => api.put('/profil', profil), 'Compte mis à jour');
         const u = ref.current.utilisateurs.find((x) => x.id === moi());
-        if (!u) return;
+        if (!u) return false;
         run((s) => trace(ops.enregistrerUtilisateur(s, { ...u, ...profil }), 'utilisateur.modification', { cible: nomUtilisateur({ ...u, ...profil }) }));
         toast('Compte mis à jour');
+        return true;
       },
-      changerMotDePasse(actuel, nouveau) {
+      async changerMotDePasse(actuel, nouveau) {
+        if (SERVEUR) {
+          try {
+            await api.post('/motdepasse', { actuel, nouveau });
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
         const u = ref.current.utilisateurs.find((x) => x.id === moi());
         if (!u || !verifierAuth(u.auth, actuel)) return false;
         run((s) => trace(ops.enregistrerUtilisateur(s, { ...u, auth: creerAuth(nouveau), demo: false }), 'utilisateur.motdepasse', { cible: nomUtilisateur(u) }));
         return true;
       },
       restaurer(contenu) {
-        setState(trace({ ...contenu, journal: contenu.journal || [] }, 'sauvegarde.restauration'));
+        setState(trace(normaliser({ ...contenu, journal: contenu.journal || [] }), 'sauvegarde.restauration'));
         setRoute({ vue: null });
         toast('Sauvegarde restaurée.');
       },
@@ -298,6 +454,8 @@ function App() {
         setSess(null);
         setModal(null);
       },
+      recharger: () => chargerEtat(),
+      enregistrerMaintenant: () => synchroniser(),
 
       /* ----- Navigation (la consultation d'un dossier est tracée) ----- */
       go(vue, params = {}) {
@@ -312,7 +470,7 @@ function App() {
         if (cible && !(recent && Date.now() - recent.ts < 5 * 60000)) run((st) => trace(st, action, { cible }));
       },
     };
-    return api;
+    return api_;
   }, []);
 
   // Déconnexion automatique après une période d'inactivité.
@@ -325,7 +483,7 @@ function App() {
     window.addEventListener('pointerdown', actif, true);
     window.addEventListener('keydown', actif, true);
     const t = setInterval(() => {
-      if (Date.now() - dernier > (ref.current.cabinet.inactivite || 15) * 60000) actions.deconnexion(true);
+      if (Date.now() - dernier > ((ref.current && ref.current.cabinet.inactivite) || 15) * 60000) actions.deconnexion(true);
     }, 15000);
     return () => {
       clearInterval(t);
@@ -334,13 +492,14 @@ function App() {
     };
   }, [user && user.id]);
 
-  const vueDonnees = useMemo(() => (portee ? vuePraticien(state, portee) : { ...state, patients: [], rdvs: [], bilans: [], factures: [] }), [state, portee]);
+  const vueDonnees = useMemo(() => (!state ? null : portee ? vuePraticien(state, portee) : { ...state, patients: [], rdvs: [], bilans: [], factures: [] }), [state, portee]);
   const ctx = useMemo(() => ({ state: vueDonnees, global: state, user, praticien, estAdmin, acces, portee, actions, go: actions.go, toast, route }), [vueDonnees, state, user, praticien, acces, route]);
 
   if (!user) {
+    if (SERVEUR && etapeLogin === 'chargement') return <p className="boot">Connexion au serveur…</p>;
     return (
       <>
-        <Login utilisateurs={state.utilisateurs} cabinet={state.cabinet} onLogin={actions.connexion} />
+        <Login utilisateurs={state ? state.utilisateurs : []} cabinet={state ? state.cabinet : {}} onLogin={actions.connexion} etapeInitiale={etapeLogin} onConnecte={actions.connecte} />
         <Toasts items={toasts} />
       </>
     );
@@ -371,17 +530,26 @@ function App() {
       </button>
     );
   };
+  const etatStockage = SERVEUR
+    ? {
+        ok: [Cloud, 'Enregistré sur le serveur sécurisé.'],
+        envoi: [Cloud, 'Enregistrement en cours…'],
+        erreur: [CloudOff, "Serveur injoignable : nouvel essai dans quelques secondes. Ne fermez pas l'onglet."],
+      }[sync]
+    : stockage
+      ? [HardDrive, 'Démonstration : données fictives, enregistrées dans ce navigateur.']
+      : [TriangleAlert, 'Stockage local indisponible : vos saisies seront perdues à la fermeture.'];
+  const IconeStockage = etatStockage[0];
 
   return (
     <AppCtx.Provider value={ctx}>
       <div className="flex h-full flex-col md:flex-row">
-        {/* Rail de navigation (écrans larges) */}
         <aside className="hidden w-[240px] flex-none flex-col bg-nav text-nav-ink md:flex">
           <div className="flex items-center gap-2.5 px-5 pb-4 pt-6">
             <Logo />
             <div className="leading-tight">
               <p className="font-display text-[19px] font-bold tracking-[0.06em]">SACCADES</p>
-              <p className="text-[11.5px] text-nav-ink-2">Cabinet d'orthoptie</p>
+              <p className="truncate text-[11.5px] text-nav-ink-2">{state.cabinet.nom || "Cabinet d'orthoptie"}</p>
             </div>
           </div>
           <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3" aria-label="Modules">
@@ -403,14 +571,14 @@ function App() {
                 <IconBtn icon={LogOut} label="Se déconnecter" onClick={() => actions.deconnexion(false)} className="!text-nav-ink-2 hover:!bg-nav-2 hover:!text-nav-ink" />
               </div>
             </div>
-            <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-snug text-nav-ink-2">
-              {stockage ? <HardDrive size={13} className="mt-px flex-none" aria-hidden="true" /> : <TriangleAlert size={13} className="mt-px flex-none" aria-hidden="true" />}
-              {stockage ? 'Maquette : données fictives, enregistrées dans ce navigateur.' : 'Stockage local indisponible : vos saisies seront perdues à la fermeture.'}
+            <p className={cx('mt-2.5 flex items-start gap-1.5 text-[11px] leading-snug', sync === 'erreur' ? 'text-warn' : 'text-nav-ink-2')} role="status">
+              <IconeStockage size={13} className="mt-px flex-none" aria-hidden="true" />
+              {etatStockage[1]}
             </p>
+            <button type="button" onClick={() => setModal('mentions')} className="mt-1.5 rounded text-[11px] text-nav-ink-2 underline-offset-2 hover:text-nav-ink hover:underline">Mentions légales</button>
           </div>
         </aside>
 
-        {/* Bandeau (téléphone) */}
         <header className="gutter flex flex-none items-center justify-between bg-nav py-2.5 text-nav-ink md:hidden">
           <div className="flex items-center gap-2">
             <Logo size={24} />
@@ -420,6 +588,11 @@ function App() {
         </header>
 
         <main id="zone" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          {MODE !== 'serveur' && (
+            <p className="gutter border-b border-warn bg-warn-soft py-1.5 text-center text-[12px] text-ink">
+              Démonstration : tous les patients sont fictifs. N'y saisissez aucune donnée réelle.
+            </p>
+          )}
           <div className="gutter mx-auto w-full max-w-[1360px] py-5 lg:py-7">
             {acces && (
               <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-warn bg-warn-soft px-4 py-3">
@@ -444,7 +617,6 @@ function App() {
           </div>
         </main>
 
-        {/* Onglets (téléphone) */}
         <nav className="gutter flex flex-none border-t border-line bg-surface md:hidden" aria-label="Modules">
           {onglets.map((v) => {
             const m = MODULES[v];
@@ -462,6 +634,7 @@ function App() {
 
       <Toasts items={toasts} />
       {modal === 'compte' && <MonCompte onClose={() => setModal(null)} />}
+      {modal === 'mentions' && <Mentions cabinet={state.cabinet} onClose={() => setModal(null)} />}
       {modal === 'menu' && (
         <Modal size="sm" title={nomUtilisateur(user)} subtitle={estAdmin ? 'Super-administrateur' : user.titre} onClose={() => setModal(null)}>
           <div className="flex flex-col gap-1">
@@ -476,6 +649,9 @@ function App() {
             <button type="button" onClick={() => setModal('compte')} className="flex h-11 items-center gap-3 rounded-md px-3 text-left text-[14px] font-medium text-ink hover:bg-surface-2">
               <KeyRound size={17} className="text-accent" aria-hidden="true" /> Mon compte
             </button>
+            <button type="button" onClick={() => setModal('mentions')} className="flex h-11 items-center gap-3 rounded-md px-3 text-left text-[14px] font-medium text-ink hover:bg-surface-2">
+              <ShieldCheck size={17} className="text-accent" aria-hidden="true" /> Mentions légales
+            </button>
             <button type="button" onClick={() => actions.deconnexion(false)} className="flex h-11 items-center gap-3 rounded-md px-3 text-left text-[14px] font-medium text-danger hover:bg-danger-soft">
               <LogOut size={17} aria-hidden="true" /> Se déconnecter
             </button>
@@ -486,4 +662,4 @@ function App() {
   );
 }
 
-window.ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(<App />);

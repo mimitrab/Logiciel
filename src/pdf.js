@@ -1,10 +1,12 @@
 // Export PDF du compte-rendu (jsPDF, chargé depuis le CDN) et remise du fichier au lecteur.
+import { jsPDF } from 'jspdf';
 import { blocs } from './letter.js';
+import { MODE } from './mode.js';
 
-/* global __STANDALONE__ */
-export const AUTONOME = typeof __STANDALONE__ !== 'undefined' && __STANDALONE__;
-
-export const pdfPret = () => !!(window.jspdf && window.jspdf.jsPDF);
+export { MODE };
+/** Hors de claude.ai, le navigateur télécharge lui-même les fichiers. */
+export const AUTONOME = MODE !== 'artefact';
+export const pdfPret = () => true;
 
 // Les polices standard du PDF ne couvrent que le jeu Windows-1252 : on remplace le reste.
 const REMPLACEMENTS = { ' ': ' ', ' ': ' ', '−': '-', 'Δ': 'dioptries', '≥': '>=', '≤': '<=', '→': '->', '″': '"', '′': "'", '‑': '-' };
@@ -16,7 +18,6 @@ const ENCRE = [26, 42, 50];
 const ENCRE2 = [85, 101, 110];
 
 export function construirePdf({ entete, destinataire, lieuDate, corps, pied }) {
-  const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210;
   const H = 297;
@@ -110,7 +111,7 @@ let promesse;
 export function telechargements() {
   if (!promesse) {
     const c = window.claude;
-    promesse = c && typeof c.use === 'function' ? Promise.resolve(c.use('downloads')).catch(() => null) : Promise.resolve(null);
+    promesse = MODE === 'artefact' && c && typeof c.use === 'function' ? Promise.resolve(c.use('downloads')).catch(() => null) : Promise.resolve(null);
   }
   return promesse;
 }

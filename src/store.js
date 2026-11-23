@@ -1,5 +1,5 @@
 // État de l'application : persistance dans le navigateur, session, opérations métier.
-import { todayISO, uid } from './lib.js';
+import { fusion, todayISO, uid } from './lib.js';
 import { acteDe, bilanVide, calculFacture, indicationReeducation, suggererActe, valeurAMY } from './domain.js';
 import { genererCorps } from './letter.js';
 import { etatDemo, rdvsDemo } from './seed.js';
@@ -20,6 +20,7 @@ export function charger() {
     etat = null;
   }
   if (!etat) return etatDemo();
+  etat = normaliser(etat);
   // L'agenda de démonstration suit le calendrier : il est reconstruit autour de la date du jour
   // lorsqu'aucun rendez-vous n'existe aujourd'hui.
   const T = todayISO();
@@ -29,6 +30,12 @@ export function charger() {
   }
   return etat;
 }
+/** Complète les bilans avec les champs apparus dans les versions récentes. */
+export function normaliser(etat) {
+  const patients = new Map(etat.patients.map((p) => [p.id, p]));
+  return { ...etat, bilans: etat.bilans.map((b) => ({ ...b, data: fusion(bilanVide(patients.get(b.patientId), b.type), b.data) })) };
+}
+
 export function enregistrer(etat) {
   try {
     localStorage.setItem(CLE, JSON.stringify(etat));
@@ -135,6 +142,9 @@ export const ops = {
   },
   statutBilan(s, id, statut) {
     return { ...s, bilans: maj(s.bilans, id, (b) => ({ ...b, statut })) };
+  },
+  enregistrerEnvoi(s, id, envois) {
+    return { ...s, bilans: maj(s.bilans, id, (b) => ({ ...b, envois: [...(b.envois || []), ...envois], statut: 'envoye' })) };
   },
   supprimerBilan(s, id) {
     return { ...s, bilans: s.bilans.filter((b) => b.id !== id) };

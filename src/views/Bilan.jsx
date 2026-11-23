@@ -1,17 +1,18 @@
 // Saisie clinique et générateur automatique du compte-rendu.
 import React, { useState } from 'react';
-import { ArrowLeft, Check, ChevronRight, ClipboardList, Copy, FileDown, FilePlus2, FileText, Lightbulb, Link2, PenLine, Plus, Receipt, RefreshCw, Scale, Send, Sparkles, Trash2, TriangleAlert, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, ClipboardList, Copy, FileDown, FilePlus2, FileText, Lightbulb, Link2, Mail, PenLine, Plus, Receipt, RefreshCw, Scale, Send, Sparkles, Trash2, TriangleAlert, Undo2 } from 'lucide-react';
 import { Area, AutoArea, Avatar, Btn, Card, Chip, ConfirmBtn, Empty, Field, Modal, Num, Pill, Segmented, Select, Tag, Text, cx, useApp } from '../ui.jsx';
 import {
   ANCIENNETES, AV_VL, AV_VP, CIRCONSTANCES, CONCLUSIONS_COULEURS, CONTROLES, CV_DEFICITS, CV_FIABILITE, CV_TECHNIQUES, DEVIATIONS, DIAGNOSTICS, FREQUENCES, PLAINTES, POURSUITES, PRECISIONS, RESULTATS_CLASSEMENT, SACCADES,
-  STATUTS_BILAN, STEREO, TEMPS_ECRAN, TESTS_CLASSEMENT, TYPES_BILAN, WORTH,
+  STATUTS_BILAN, STEREO, TEMPS_ECRAN, TESTS_CLASSEMENT, TYPES_BILAN, WORTH, TRAITEMENTS_AMBLYOPIE, STATUTS_AMBLYOPIE, HEURES_TRAITEMENT, REEVALUATIONS, CANAUX_ENVOI,
+  adresseMonEspaceSante, amblyoVide,
   avLabel, completude, cotation, evalFusion, evalPPC, indicationReeducation, lectureLang, normesTexte, resumeBilan, stereoOptions, suggererDiagnostics,
 } from '../domain.js';
 import { blocs, courrier, texteComplet } from '../letter.js';
 import { contexteCourrier } from '../store.js';
-import { AUTONOME, exporterPdf, pdfPret } from '../pdf.js';
-import { ageTexte, dateCourte, nomComplet, num, setIn, slug } from '../lib.js';
-import { CorrectionFields, ICONES_BILAN, useTelechargements } from './commun.jsx';
+import { AUTONOME, MODE, exporterPdf, pdfPret } from '../pdf.js';
+import { ageTexte, dateCourte, horodatage, nomComplet, num, setIn, slug } from '../lib.js';
+import { CorrectionFields, ICONES_BILAN, copierTexte, useTelechargements } from './commun.jsx';
 
 /* ---------- Briques de mise en page ---------- */
 function Section({ n, id, title, right, children }) {
@@ -412,6 +413,53 @@ function SectionComplements({ n, d, set }) {
 }
 
 /* ---------- Conclusion et projet thérapeutique ---------- */
+function TraitementAmblyopie({ k, set }) {
+  const a = { ...amblyoVide(), ...(k.amblyo || {}) };
+  const s = (champ) => (v) => set(`conclusion.amblyo.${champ}`, v);
+  const oeil = k.amblyopieOeil === 'OG' ? "l'œil droit" : k.amblyopieOeil === 'OD' ? "l'œil gauche" : null;
+  const bouton = (actif) => cx('tnum h-8 min-w-[44px] rounded-md border px-2.5 font-mono text-[12.5px] font-medium transition-colors', actif ? 'border-accent bg-accent text-on-accent' : 'border-line-strong bg-surface text-ink-2 hover:border-ink-3');
+  return (
+    <div id="b-amblyo" className="mt-3 rounded-lg border border-line p-3">
+      <p className="mb-2.5 text-[13px] font-semibold text-ink">Traitement de l'amblyopie</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Moyen" htmlFor="b-amblyo-traitement">
+          <Select id="b-amblyo-traitement" value={a.traitement} onChange={s('traitement')} placeholder="Pas de traitement proposé" options={TRAITEMENTS_AMBLYOPIE.map((t) => [t[0], t[1]])} />
+        </Field>
+        <Field label="Dans le compte-rendu">
+          <Segmented id="b-amblyo-statut" label="Statut du traitement" allowEmpty={false} value={a.statut} onChange={s('statut')} options={STATUTS_AMBLYOPIE} />
+        </Field>
+      </div>
+      {a.traitement && (
+        <>
+          <p className="mt-2 text-[12px] text-ink-3">{oeil ? `Œil traité : ${oeil}, l'œil non amblyope.` : "Précisez l'œil amblyope ci-dessus : l'œil traité est l'autre."}</p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div>
+              <span className="lbl">Durée quotidienne</span>
+              <div className="flex flex-wrap gap-1.5">
+                {HEURES_TRAITEMENT.map((h) => (
+                  <button key={h} type="button" className={bouton(!a.tempsPlein && a.heures === h)} onClick={() => set('conclusion.amblyo', { ...a, heures: h, tempsPlein: false })}>{h} h</button>
+                ))}
+                <button type="button" className={bouton(a.tempsPlein)} onClick={() => set('conclusion.amblyo', { ...a, tempsPlein: !a.tempsPlein })}>Temps plein</button>
+              </div>
+            </div>
+            <Field label="Jours par semaine" htmlFor="b-amblyo-jours" className="w-[150px]">
+              <Select id="b-amblyo-jours" value={a.jours} disabled={a.tempsPlein} onChange={s('jours')} placeholder={null} options={[['7', '7 jours sur 7'], ['6', '6 jours sur 7'], ['5', '5 jours sur 7']]} />
+            </Field>
+            <Field label="Réévaluation de l'acuité" htmlFor="b-amblyo-reevaluation" className="w-[180px]">
+              <Select id="b-amblyo-reevaluation" value={a.reevaluation} onChange={s('reevaluation')} placeholder="Non précisée" options={REEVALUATIONS.map((r) => [r, `Dans ${r}`])} />
+            </Field>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Chip id="b-amblyo-vp" checked={a.activitesVP} onChange={s('activitesVP')}>Activités en vision de près pendant le traitement</Chip>
+            <Chip id="b-amblyo-bascule" checked={a.bascule} onChange={s('bascule')}>Surveillance d'une amblyopie à bascule</Chip>
+          </div>
+          {a.traitement === 'atropine' && <p className="mt-2 text-[12px] text-warn">La pénalisation par atropine nécessite une prescription médicale.</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function SectionConclusion({ n, d, set, normes, type }) {
   const k = d.conclusion;
   const sugg = suggererDiagnostics(d, normes, type);
@@ -453,6 +501,7 @@ function SectionConclusion({ n, d, set, normes, type }) {
             )}
           </div>
         )}
+        {k.diag.amblyopie && <TraitementAmblyopie k={k} set={set} />}
       </Groupe>
 
       <Groupe label="Projet thérapeutique">
@@ -473,7 +522,7 @@ function SectionConclusion({ n, d, set, normes, type }) {
           <Chip id="b-conseils" checked={k.conseils} onChange={(v) => set('conclusion.conseils', v)}>Conseils d'hygiène visuelle</Chip>
           <Chip id="b-avis" checked={k.avisOphtalmo} onChange={(v) => set('conclusion.avisOphtalmo', v)}>Contrôle ophtalmologique</Chip>
           <Chip id="b-prismation" checked={k.prismation} onChange={(v) => set('conclusion.prismation', v)}>Prismation à discuter</Chip>
-          <Chip id="b-occlusion" checked={k.occlusion} onChange={(v) => set('conclusion.occlusion', v)}>Occlusion ou pénalisation</Chip>
+          {!k.diag.amblyopie && <Chip id="b-occlusion" checked={k.occlusion} onChange={(v) => set('conclusion.occlusion', v)}>Occlusion ou pénalisation</Chip>}
         </div>
         {k.reeducation && ind.ok && (
           <div className="mt-3 flex flex-wrap items-end gap-3 rounded-md bg-surface-2 px-3 py-3">
@@ -607,9 +656,84 @@ function ApercuPDF({ lettre, nomFichier, patient, onClose, onCopy }) {
   );
 }
 
+function EnvoiForm({ bilan, patient, lettre, nomFichier, onClose }) {
+  const { actions, toast } = useApp();
+  const dl = useTelechargements();
+  const presc = patient.prescripteur || {};
+  const opposition = patient.rgpd && patient.rgpd.transmission === 'opposition';
+  const insOk = !!(patient.ins && patient.ins.qualifiee);
+  const adresseMES = adresseMonEspaceSante(patient);
+  const [adresse, setAdresse] = useState(presc.mssante || '');
+  const [canaux, setCanaux] = useState({ mssante: !opposition && !!presc.mssante, mes: false, main: false });
+  const coche = (k) => (v) => setCanaux((c) => ({ ...c, [k]: v }));
+  const choix = [
+    canaux.mssante && !opposition && adresse.trim() && { canal: 'mssante', destinataire: `Dr ${presc.nom || 'prescripteur'} <${adresse.trim()}>` },
+    canaux.mes && insOk && adresseMES && { canal: 'mes', destinataire: adresseMES },
+    canaux.main && { canal: 'main', destinataire: nomComplet(patient) },
+  ].filter(Boolean);
+  const copier = async (texte) => toast((await copierTexte(texte)) ? 'Copié dans le presse-papiers' : 'Copie refusée : sélectionnez le texte à la main.');
+  const pdf = async () => {
+    const r = await exporterPdf(lettre, nomFichier, dl);
+    if (r === 'ok') actions.tracer('cr.export', nomComplet(patient));
+    toast(r === 'ok' ? `PDF remis : ${nomFichier}` : r === 'refuse' ? 'Téléchargement annulé.' : "Le téléchargement n'est pas disponible dans cet affichage.", r === 'indisponible' ? 'danger' : undefined);
+  };
+  const ligne = (k, contenu, desactive) => (
+    <div className={cx('rounded-lg border p-3', canaux[k] && !desactive ? 'border-accent' : 'border-line')}>
+      <Chip id={`envoi-${k}`} checked={canaux[k] && !desactive} disabled={desactive} onChange={coche(k)}>{CANAUX_ENVOI[k].label}</Chip>
+      <div className="mt-2 text-[12.5px] leading-relaxed text-ink-2">{contenu}</div>
+    </div>
+  );
+  return (
+    <Modal
+      title="Envoyer le compte-rendu"
+      subtitle={`${nomComplet(patient)} · ${TYPES_BILAN[bilan.type].label} du ${dateCourte(bilan.date)}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Btn icon={FileDown} className="mr-auto" disabled={!AUTONOME && !dl} onClick={pdf}>Télécharger le PDF</Btn>
+          <Btn onClick={onClose}>Annuler</Btn>
+          <Btn variant="primary" icon={Send} disabled={!choix.length} onClick={() => { actions.enregistrerEnvoi(bilan.id, choix); onClose(); }}>Enregistrer l'envoi</Btn>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {ligne('mssante', opposition ? (
+          <span className="text-danger">Le patient s'est opposé à la transmission de ses comptes-rendus au prescripteur.</span>
+        ) : (
+          <>
+            <span>À l'attention du Dr {presc.nom || '(prescripteur non renseigné)'}{presc.specialite ? `, ${presc.specialite.toLowerCase()}` : ''}.</span>
+            <div className="mt-2 flex gap-2">
+              <Text id="envoi-adresse" aria-label="Adresse MSSanté du prescripteur" className="num" value={adresse} onChange={setAdresse} placeholder="prenom.nom@medecin.mssante.fr" />
+              <Btn icon={Copy} disabled={!adresse.trim()} onClick={() => copier(adresse.trim())}>Copier</Btn>
+            </div>
+          </>
+        ), opposition)}
+        {ligne('mes', insOk && adresseMES ? (
+          <>
+            <span>Le document est déposé dans la messagerie de santé du patient. Seul le professionnel peut ouvrir l'échange.</span>
+            <div className="mt-2 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-md bg-surface-2 px-2.5 py-1.5 font-mono text-[12.5px] text-ink">{adresseMES}</code>
+              <Btn icon={Copy} onClick={() => copier(adresseMES)}>Copier</Btn>
+            </div>
+          </>
+        ) : (
+          <span className="text-warn">INS non qualifiée : vérifiez l'identité du patient sur une pièce d'identité et récupérez son INS (téléservice INSi) avant d'utiliser cette adresse. La qualification se coche dans son dossier.</span>
+        ), !(insOk && adresseMES))}
+        {ligne('main', <span>Remise du compte-rendu imprimé ou envoi postal au patient ou à son représentant légal.</span>)}
+        <div className="rounded-lg bg-surface-2 px-3.5 py-3 text-[12.5px] leading-relaxed text-ink-2">
+          <p className="font-semibold text-ink">Comment envoyer</p>
+          <p>1. Téléchargez le PDF. 2. Depuis votre messagerie sécurisée MSSanté (le webmail de votre opérateur), écrivez aux adresses ci-dessus et joignez le PDF. 3. Enregistrez l'envoi : la date et les destinataires sont notés dans le dossier et au journal d'audit.</p>
+          <p className="mt-1.5 text-ink-3">{MODE === 'serveur' ? "SACCADES n'est pas encore raccordé directement à MSSanté : ce raccordement passe par un opérateur MSSanté et le référencement du logiciel." : "Démonstration : aucun message n'est réellement envoyé."}</p>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function PanneauCR({ bilan, patient }) {
   const { state, actions, toast, go } = useApp();
   const [apercu, setApercu] = useState(false);
+  const [envoi, setEnvoi] = useState(false);
   const c = completude(bilan.data);
   const lettre = courrier(patient, bilan, contexteCourrier(state, bilan.praticienId));
   const facture = state.factures.find((f) => f.bilanId === bilan.id);
@@ -618,31 +742,17 @@ function PanneauCR({ bilan, patient }) {
   const parties = type.exploration
     ? [['Contexte', c.motif], [bilan.type === 'cv' ? 'Champ visuel' : 'Vision des couleurs', bilan.type === 'cv' ? c.cv : c.couleurs]]
     : [['Anamnèse', c.motif], ['Acuité', c.av], ['Oculomoteur', c.om], ['Conclusion', c.conclusion]];
-  const opposition = patient.rgpd && patient.rgpd.transmission === 'opposition';
-
   const copier = async () => {
-    const texte = texteComplet(lettre);
-    let ok = false;
-    try {
-      await navigator.clipboard.writeText(texte);
-      ok = true;
-    } catch (e) {
-      const zone = document.createElement('textarea');
-      zone.value = texte;
-      zone.setAttribute('readonly', '');
-      zone.style.position = 'fixed';
-      zone.style.opacity = '0';
-      document.body.appendChild(zone);
-      zone.select();
-      try {
-        ok = document.execCommand('copy');
-      } catch (err) {
-        ok = false;
-      }
-      document.body.removeChild(zone);
-    }
+    const ok = await copierTexte(texteComplet(lettre));
     if (ok) actions.tracer('cr.copie', nomComplet(patient));
     toast(ok ? 'Compte-rendu copié dans le presse-papiers' : 'Copie refusée par le navigateur : sélectionnez le texte du courrier pour le copier.', ok ? undefined : 'danger');
+  };
+  const modifier = () => {
+    const zone = document.getElementById(`cr-texte-${bilan.id}`);
+    if (!zone) return;
+    zone.focus();
+    zone.setSelectionRange(zone.value.length, zone.value.length);
+    zone.scrollIntoView({ block: 'center' });
   };
 
   if (!bilan.cr) {
@@ -654,7 +764,10 @@ function PanneauCR({ bilan, patient }) {
             <h2 className="text-[16px] font-semibold text-ink">Compte-rendu au médecin prescripteur</h2>
           </div>
           <p className="max-w-prose text-[13px] leading-relaxed text-ink-2">
-            Le courrier est rédigé à partir de la saisie : en-tête du cabinet, contexte, synthèse de l'examen, conclusion et conduite à tenir. Les rubriques laissées vides sont simplement omises.
+            Le courrier est rédigé à partir de la saisie : en-tête du cabinet, contexte, synthèse de l'examen, conclusion et conduite à tenir. Les rubriques laissées vides sont omises, et le texte reste ensuite entièrement modifiable.
+          </p>
+          <p className="max-w-prose text-[12px] leading-relaxed text-ink-3">
+            La rédaction suit des règles fixes, sans intelligence artificielle : aucune donnée n'est transmise à un service extérieur.
           </p>
           <ul className="flex flex-wrap gap-1.5">
             {parties.map(([label, ok]) => (
@@ -680,8 +793,9 @@ function PanneauCR({ bilan, patient }) {
           <Pill tone={STATUTS_BILAN[bilan.statut].tone}>{STATUTS_BILAN[bilan.statut].label}</Pill>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Btn size="sm" icon={PenLine} onClick={modifier}>Modifier</Btn>
           <Btn size="sm" icon={Copy} onClick={copier}>Copier</Btn>
-          <Btn size="sm" icon={FileDown} onClick={() => setApercu(true)}>Export PDF</Btn>
+          <Btn size="sm" icon={FileDown} onClick={() => setApercu(true)}>PDF</Btn>
         </div>
       </header>
 
@@ -692,19 +806,16 @@ function PanneauCR({ bilan, patient }) {
         </span>
         {bilan.cr.modifie && <ConfirmBtn label="Régénérer" confirmLabel="Écraser mes retouches" icon={RefreshCw} onConfirm={() => actions.genererCR(bilan.id)} />}
       </div>
-      {opposition && (
-        <p className="flex items-start gap-2 bg-danger-soft px-4 py-2 text-[12.5px] text-danger">
-          <TriangleAlert size={14} className="mt-0.5 flex-none" aria-hidden="true" />
-          <span className="text-ink">Le patient s'est opposé à la transmission de ses comptes-rendus au médecin prescripteur : l'envoi est bloqué tant que le dossier l'indique.</span>
-        </p>
-      )}
-
       <div className="bg-surface-2 px-3 py-4 sm:px-5">
+        <p className="mb-3 flex items-start gap-2 text-[12.5px] leading-snug text-ink-2">
+          <PenLine size={14} className="mt-0.5 flex-none text-accent" aria-hidden="true" />
+          <span><span className="font-medium text-ink">Texte libre.</span> Cliquez dans le courrier pour corriger, compléter ou supprimer ce que vous voulez : vos retouches sont conservées.</span>
+        </p>
         <div className="paper px-5 py-6 text-[13px] leading-[1.55] sm:px-8 sm:py-8">
           <Entete lettre={lettre} />
           <AutoArea id={`cr-texte-${bilan.id}`} aria-label="Texte du compte-rendu, modifiable" className="paper-body mt-6" value={bilan.cr.texte} onChange={(t) => actions.editerCR(bilan.id, t)} />
         </div>
-        <p className="mt-2 text-center text-[11.5px] text-ink-3">Cliquez dans le courrier pour le modifier. L'en-tête reprend le cabinet et votre compte.</p>
+        <p className="mt-2 text-center text-[11.5px] text-ink-3">L'en-tête reprend le cabinet et votre compte ; le corps du courrier est à vous.</p>
       </div>
 
       <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-3">
@@ -713,12 +824,23 @@ function PanneauCR({ bilan, patient }) {
         ) : (
           <Btn size="sm" icon={Receipt} onClick={() => actions.facturerBilan(bilan.id)}>Facturer cet acte</Btn>
         )}
-        {bilan.statut === 'envoye' ? (
-          <Btn size="sm" variant="ghost" icon={Undo2} onClick={() => actions.statutBilan(bilan.id, 'a-envoyer')}>Repasser en « à envoyer »</Btn>
-        ) : (
-          <Btn size="sm" variant="primary" icon={Send} disabled={opposition} onClick={() => actions.statutBilan(bilan.id, 'envoye')}>Marquer comme envoyé</Btn>
-        )}
+        <span className="flex flex-wrap items-center gap-2">
+          {bilan.statut === 'envoye' && <Btn size="sm" variant="ghost" icon={Undo2} onClick={() => actions.statutBilan(bilan.id, 'a-envoyer')}>Repasser en « à envoyer »</Btn>}
+          <Btn size="sm" variant={bilan.statut === 'envoye' ? 'secondary' : 'primary'} icon={Mail} onClick={() => setEnvoi(true)}>{bilan.statut === 'envoye' ? 'Nouvel envoi' : 'Envoyer'}</Btn>
+        </span>
       </footer>
+      {bilan.envois && bilan.envois.length > 0 && (
+        <ul className="border-t border-line px-4 py-2.5 text-[12.5px] text-ink-2">
+          {bilan.envois.map((e, i) => (
+            <li key={i} className="flex flex-wrap gap-x-2">
+              <span className="tnum font-mono text-[12px] text-ink-3">{horodatage(e.ts)}</span>
+              <span className="font-medium text-ink">{CANAUX_ENVOI[e.canal] ? CANAUX_ENVOI[e.canal].court : e.canal}</span>
+              <span className="min-w-0 break-all">{e.destinataire}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {envoi && <EnvoiForm bilan={bilan} patient={patient} lettre={lettre} nomFichier={nomFichier} onClose={() => setEnvoi(false)} />}
       {apercu && <ApercuPDF lettre={lettre} nomFichier={nomFichier} patient={patient} onClose={() => setApercu(false)} onCopy={copier} />}
     </Card>
   );
